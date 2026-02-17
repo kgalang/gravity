@@ -8,6 +8,7 @@ Keep moving parts explicit and replaceable.
 - `SessionStore`: manages per-session `log.jsonl` and `context.jsonl` files.
 - `SkillLoader`: loads shared + agent-specific skills from `store/` each turn (no caching).
 - `MemoryStore`: loads/writes `MEMORY.md` per agent.
+- `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
 - `RunLogStore`: writes run lifecycle records to `gravity.runs`.
 - `ToolDispatcher`: single dispatch seam for all tool execution (host now, sandbox later).
 - `Scheduler`: heartbeat and cron execution with target session behavior.
@@ -20,6 +21,8 @@ Keep moving parts explicit and replaceable.
 ## Ownership and Rollback Notes
 - `DbClient` owner: platform runtime layer.
 - `DbClient` rollback path: swap `src/runtime/db.ts` back to direct `pg` access while preserving SQL contracts and migration files.
+- `RunLifecycleLogger` owner: platform runtime layer.
+- `RunLifecycleLogger` rollback path: revert runtime entrypoints to direct `console.log` messages while preserving stable ID fields in log lines.
 
 ## Stability Requirement
 Do not change interface boundaries without updating this file and `docs/checkpoints/mvp-status.md` in the same change.

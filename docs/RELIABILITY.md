@@ -3,6 +3,7 @@
 ## MVP Position
 - Single process runtime.
 - Best-effort startup checks.
+- Run lifecycle wrapper emits typed events with stable IDs to the runtime log sink.
 - No durable job replay yet.
 
 ## Planned Reliability Contracts
@@ -12,5 +13,5 @@
 4. Deterministic cancellation and timeout semantics.
 
 ## Immediate Next Work
-1. Add run lifecycle logging wrapper before Slack integration (CP3).
+1. Route run lifecycle events into persistent `gravity.runs` writes during CP3/CP5 integration.
 2. Add startup reconciliation checks before proactive behavior (CP10).
