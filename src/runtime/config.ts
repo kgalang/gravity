@@ -17,7 +17,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   return {
     env: env.GRAVITY_ENV ?? "dev",
     databaseUrl:
-      env.DATABASE_URL ?? "postgres://gravity:gravity@localhost:5432/gravity",
+      env.DATABASE_URL ??
+      "postgres://gravity:gravity@localhost:5432/gravity?sslmode=disable",
     heartbeatSeconds,
   };
 }

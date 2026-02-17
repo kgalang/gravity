@@ -2,7 +2,8 @@
 
 ## MVP Topology
 - Runtime process: `src/` (single process scaffold, later to host Slack loop + scheduling + tool dispatch).
-- Queryable durable state: Postgres schema `gravity` (`schema.sql`).
+- Queryable durable state: Postgres schema `gravity` (versioned in `db/migrations/`, bootstrap snapshot in `schema.sql`).
+- Query layer: Kysely + pg dialect (`src/runtime/db.ts`).
 - Durable file state: `store/` (agent skills, memory, shared connectors, shared knowledge).
 - Ephemeral runtime state: `workspace/` (session logs, compactable context, scratch).
 
