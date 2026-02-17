@@ -24,5 +24,5 @@ SELECT id, name, status, channel_id FROM gravity.agents;
 
 ## Notes
 - `db/migrations/` is the source of truth for schema changes; `schema.sql` is a bootstrap snapshot.
-- `seed.sql` uses placeholder `channel_id` values (`C_WIGGS`, `C_COMPLIANCE`). Replace with real Slack channel IDs before CP3.
+- `seed.sql` contains workspace-specific Slack `channel_id` values. Update them before applying in a different workspace.
 - Wiggs DuckDB connector path assumes local clone at `/Users/kevingalang/code/jaffle_shop_duckdb`.

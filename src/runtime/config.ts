@@ -1,16 +1,19 @@
 export type AppConfig = {
   env: string;
   databaseUrl: string;
-  heartbeatSeconds: number;
+  livenessIntervalSeconds: number;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
-  const heartbeatRaw = env.GRAVITY_BOOTSTRAP_HEARTBEAT_SECONDS ?? "30";
-  const heartbeatSeconds = Number(heartbeatRaw);
+  const livenessIntervalRaw = env.GRAVITY_LIVENESS_INTERVAL_SECONDS ?? "30";
+  const livenessIntervalSeconds = Number(livenessIntervalRaw);
 
-  if (!Number.isFinite(heartbeatSeconds) || heartbeatSeconds < 5) {
+  if (
+    !Number.isFinite(livenessIntervalSeconds) ||
+    livenessIntervalSeconds < 5
+  ) {
     throw new Error(
-      "GRAVITY_BOOTSTRAP_HEARTBEAT_SECONDS must be a number >= 5",
+      "GRAVITY_LIVENESS_INTERVAL_SECONDS must be a number >= 5",
     );
   }
 
@@ -19,6 +22,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     databaseUrl:
       env.DATABASE_URL ??
       "postgres://gravity:gravity@localhost:5432/gravity?sslmode=disable",
-    heartbeatSeconds,
+    livenessIntervalSeconds,
   };
 }

@@ -8,10 +8,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#dist\"",
     "lint:repo": "node scripts/lint-repo.mjs",
     "test:invariants": "node scripts/test-invariants.mjs",
-    "check": "npm run typecheck && npm run lint:md && npm run lint:repo && npm run test:invariants",
+    "check": "npm run typecheck && npm run test:unit && npm run lint:md && npm run lint:repo && npm run test:invariants",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:migrate": "bash scripts/db-migrate.sh",
@@ -26,7 +28,8 @@
     "dbmate": "^2.30.0",
     "markdownlint-cli2": "^0.18.1",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "kysely": "^0.28.11",

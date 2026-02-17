@@ -15,7 +15,7 @@ INSERT INTO gravity.agents (
     'Data analyst proof-of-concept agent.',
     'claude-sonnet-4-5-20250929',
     'active',
-    'C_WIGGS',
+    'C0AFKMMDV4J',
     'store/agents/data-analyst/skills',
     'store/agents/data-analyst/memory',
     jsonb_build_object(
@@ -29,7 +29,7 @@ INSERT INTO gravity.agents (
     'Compliance review proof-of-concept agent.',
     'claude-sonnet-4-5-20250929',
     'active',
-    'C_COMPLIANCE',
+    'C0AFYK6AVQR',
     'store/agents/compliance-helper/skills',
     'store/agents/compliance-helper/memory',
     jsonb_build_object('connector', 'knowledge-docs')
