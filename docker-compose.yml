@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gravity-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gravity
+      POSTGRES_PASSWORD: gravity
+      POSTGRES_DB: gravity
+    ports:
+      - "5432:5432"
+    volumes:
+      - gravity-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gravity -d gravity"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  gravity-pgdata:
