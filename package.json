@@ -1,0 +1,25 @@
+{
+  "name": "gravity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#dist\"",
+    "lint:repo": "node scripts/lint-repo.mjs",
+    "test:invariants": "node scripts/test-invariants.mjs",
+    "check": "npm run typecheck && npm run lint:md && npm run lint:repo && npm run test:invariants",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:apply": "bash scripts/db-apply.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "markdownlint-cli2": "^0.18.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
