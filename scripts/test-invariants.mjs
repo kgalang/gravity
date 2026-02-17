@@ -105,6 +105,34 @@ function parseCheckpointRows(checkpointText) {
   return result;
 }
 
+function invariantMigrationScaffold() {
+  const migrationsDir = path.join(root, "db/migrations");
+  if (!existsSync(migrationsDir)) {
+    addError("Missing db/migrations directory");
+    return;
+  }
+
+  const migrationFiles = readdirSync(migrationsDir)
+    .filter((entry) => entry.endsWith(".sql"))
+    .sort();
+
+  if (migrationFiles.length === 0) {
+    addError("db/migrations must contain at least one .sql migration file");
+    return;
+  }
+
+  for (const migrationFile of migrationFiles) {
+    const relativePath = path.join("db/migrations", migrationFile);
+    const text = readText(relativePath);
+    if (!/--\s*migrate:up/i.test(text)) {
+      addError(`${relativePath} is missing a "-- migrate:up" section`);
+    }
+    if (!/--\s*migrate:down/i.test(text)) {
+      addError(`${relativePath} is missing a "-- migrate:down" section`);
+    }
+  }
+}
+
 function invariantSeedAgentFilesystemParity() {
   const seedText = readText("seed.sql");
   const valuesBlockMatch = seedText.match(
@@ -352,6 +380,7 @@ function invariantStableIdentifiers() {
   }
 }
 
+invariantMigrationScaffold();
 invariantSeedAgentFilesystemParity();
 invariantActivePlanDiscipline();
 const checkpointRows = invariantCheckpointIntegrity();

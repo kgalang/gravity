@@ -19,6 +19,7 @@ const requiredFiles = [
   "docs/harness/practices.md",
   "schema.sql",
   "seed.sql",
+  "db/migrations",
   "docker-compose.yml",
   "store/shared/skills/self-author.md",
   "store/agents/data-analyst/memory/MEMORY.md",
@@ -121,6 +122,16 @@ if (existsSync(activePlansDir)) {
     if (!/Last Updated:\s+\d{4}-\d{2}-\d{2}/.test(text)) {
       errors.push(`${plan} must declare Last Updated: YYYY-MM-DD`);
     }
+  }
+}
+
+const migrationsDir = path.join(root, "db/migrations");
+if (existsSync(migrationsDir)) {
+  const migrations = readdirSync(migrationsDir).filter((entry) =>
+    entry.endsWith(".sql"),
+  );
+  if (migrations.length === 0) {
+    errors.push("db/migrations must contain at least one .sql migration file");
   }
 }
 

@@ -10,11 +10,11 @@ Create a runnable repo baseline aligned with `mvp_requirements.md` and harness e
 ## Work Items
 - [x] Create Node/TypeScript runtime skeleton with a no-crash `npm run dev` entrypoint.
 - [x] Create `store/` and `workspace/` directory contracts.
-- [x] Add Postgres infra files (`docker-compose.yml`, `schema.sql`, `seed.sql`, `db-apply.sh`).
+- [x] Add Postgres infra files (`docker-compose.yml`, `db/migrations`, `schema.sql`, `seed.sql`, `db-apply.sh`).
 - [x] Add concise `AGENTS.md` map and system-of-record docs scaffold.
 - [x] Add repository lint checks for docs and checkpoint discipline.
 - [x] Verify runtime and policy checks in this environment.
-- [ ] Verify Postgres startup and schema apply in this environment. (Blocked: local Docker daemon unavailable)
+- [x] Verify Postgres startup and schema apply in this environment.
 
 ## Risks
 - Docker daemon may not be available on this machine.

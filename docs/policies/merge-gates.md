@@ -10,6 +10,6 @@ No merge unless all gates pass.
 
 ## Additional Rules
 1. Any change to `store/shared/skills` must include a short rationale in the PR description.
-2. Any change to `schema.sql` must include a migration note and verification query.
+2. Any change to `db/migrations/*.sql` must include a migration note and verification query.
 3. Any new runtime component must declare its boundary in `docs/architecture/interfaces.md`.
 4. Tacit-knowledge ratchets in `npm run test:invariants` must stay green; do not bypass failing invariants without an explicit policy update.

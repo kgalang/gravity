@@ -6,5 +6,5 @@ Last Updated: 2026-02-17
 | --- | --- | --- | --- |
 | TD-001 | No runtime tests yet | Regression risk rises quickly in CP3+ | Add test scaffold before Slack loop merge |
 | TD-002 | Docker daemon dependency not validated in CI | Local setup drift can block CP2 | Add compose smoke job or documented fallback |
-| TD-003 | No migration framework yet | Schema evolution risk after CP2 | Add migration tooling before first nontrivial schema change |
-| TD-004 | No lockfile committed yet | Dependency drift over time | Commit `package-lock.json` with baseline |
+| TD-003 | No CI migration smoke test yet | Migration regressions can slip until manual runtime checks | Add CI job for `npm run db:up && npm run db:migrate && npm run db:apply` |
+| TD-004 | `schema.sql` snapshot is maintained manually | Schema snapshot can drift from `db/migrations/` over time | Add a repo check that validates `schema.sql` matches migration output |
