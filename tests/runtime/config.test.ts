@@ -10,6 +10,8 @@ describe("loadConfig", () => {
       databaseUrl:
         "postgres://gravity:gravity@localhost:5432/gravity?sslmode=disable",
       livenessIntervalSeconds: 30,
+      slackAppToken: null,
+      slackBotToken: null,
     });
   });
 
@@ -24,7 +26,19 @@ describe("loadConfig", () => {
       env: "test",
       databaseUrl: "postgres://custom-url",
       livenessIntervalSeconds: 45,
+      slackAppToken: null,
+      slackBotToken: null,
     });
+  });
+
+  it("normalizes optional Slack tokens", () => {
+    const config = loadConfig({
+      SLACK_APP_TOKEN: "  xapp-abc  ",
+      SLACK_BOT_TOKEN: "",
+    });
+
+    expect(config.slackAppToken).toBe("xapp-abc");
+    expect(config.slackBotToken).toBeNull();
   });
 
   it("throws on invalid liveness interval values", () => {
