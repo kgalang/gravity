@@ -496,12 +496,14 @@ function deriveMessageEntrypoint(
     return "app_mention";
   }
 
-  if (message.threadTs !== message.messageTs) {
-    return "thread_reply";
-  }
-
+  // DM thread replies are treated as direct_message so channel-owned main sessions
+  // keep handling follow-ups even when users start Slack thread UI off bot messages.
   if (message.isDirectMessage) {
     return "direct_message";
+  }
+
+  if (message.threadTs !== message.messageTs) {
+    return "thread_reply";
   }
 
   return null;
