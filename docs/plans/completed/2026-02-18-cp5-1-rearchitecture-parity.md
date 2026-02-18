@@ -1,6 +1,6 @@
 # CP5.1 Plan (Rearchitecture + Parity)
 
-Status: active
+Status: complete
 Owner: kevin + codex
 Last Updated: 2026-02-18
 
@@ -90,7 +90,7 @@ Gate:
 - `npm run check`
 
 ### Step 7 - Prove parity + close docs/checkpoints
-Status: next
+Status: complete
 
 Deliverables:
 - Verify CP5/CP10 harness parity and live smoke matrix.
@@ -132,6 +132,12 @@ Gate:
   - `src/runtime/slash-command-router.ts`
   - `src/runtime/trigger-normalizer.ts`
 - Removed legacy unit tests tied to deleted modules and updated runtime paths/scripts to compile and run without those seams.
+- Step 7 parity gates passed after Step 6 cutover:
+  - `npm run verify:cp5`
+  - `npm run verify:cp10`
+  - `npm run check`
+  - `npm run lint:repo`
+- Closed CP5.1 docs/checkpoint state: plan marked complete, checkpoint board updated, and CP6 unblocked for active execution.
 
 ## Parity Matrix (Required)
 - Slash command routing + ack behavior parity.
