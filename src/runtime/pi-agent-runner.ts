@@ -4,9 +4,7 @@ import { type Api, getModels, type Model } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
   createAgentSession,
-  createBashTool,
   createExtensionRuntime,
-  createReadTool,
   ModelRegistry,
   SessionManager,
   SettingsManager,
@@ -18,6 +16,10 @@ import { Value } from "@sinclair/typebox/value";
 import type { Kysely } from "kysely";
 import { parseAgentConfig, type AgentConfig } from "./agent-config.js";
 import { gravitySchema, type GravityDatabase } from "./db.js";
+import type {
+  ExecutorManager,
+  ExecutorRuntime,
+} from "./executor-manager.js";
 
 const DEFAULT_ANTHROPIC_MODEL_ID = "claude-opus-4-6";
 const MAX_DBT_CONTEXT_FILES = 10;
@@ -52,9 +54,11 @@ type AgentAssistantMessage = Static<typeof AgentAssistantMessageSchema>;
 export type RunPiAgentTurnInput = {
   db: Kysely<GravityDatabase>;
   agentId: string;
+  agentRuntime: ExecutorRuntime;
   sessionKey: string;
   prompt: string;
   anthropicApiKey: string | null;
+  executorManager: ExecutorManager;
 };
 
 export type RunPiAgentTurnResult = {
@@ -473,6 +477,7 @@ export async function runPiAgentTurn(
 
   const modelRegistry = new ModelRegistry(authStorage);
   const model = resolveAnthropicModelId(agent.model);
+  const executor = input.executorManager.resolve(input.agentRuntime);
   const sessionContextPath = createSessionContextPath(input.agentId, input.sessionKey);
   const sessionDir = path.dirname(sessionContextPath);
   await mkdir(sessionDir, { recursive: true });
@@ -489,7 +494,7 @@ export async function runPiAgentTurn(
     modelRegistry,
     model,
     thinkingLevel: "high",
-    tools: [createReadTool(process.cwd()), createBashTool(process.cwd())],
+    tools: executor.createTools(process.cwd()),
     resourceLoader,
     sessionManager,
     settingsManager,

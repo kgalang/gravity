@@ -27,7 +27,8 @@ Keep moving parts explicit and replaceable.
 - `SessionStore`: manages per-session `log.jsonl` and `context.jsonl` files.
 - `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
 - `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
-- `ToolDispatcher`: single dispatch seam for all tool execution (host now, sandbox later).
+- `ExecutorManager` (`src/runtime/executor-manager.ts`): single executor dispatch seam for all tool execution with per-agent runtime selection (`host` default, sandbox scaffold disabled).
+- `ToolDispatcher`: single dispatch seam for all tool execution (implemented through `ExecutorManager` in current runtime).
 - `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): legacy proactive resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 4; targeted for removal in CP5.1 Step 6.
 - `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
 
@@ -69,6 +70,8 @@ Keep moving parts explicit and replaceable.
 - `RunLifecycleLogger` rollback path: revert runtime entrypoints to direct `console.log` messages while preserving stable ID fields in log lines.
 - `RunLogStore` owner: platform runtime layer.
 - `RunLogStore` rollback path: keep lifecycle log lines but disable `gravity.runs` writes from `src/index.ts` while retaining the DB schema contract.
+- `ExecutorManager` owner: platform runtime layer.
+- `ExecutorManager` rollback path: revert `pi-agent-runner` tool wiring to direct host tool construction while keeping runtime policy fields backward-compatible.
 - `ProactiveTriggerScheduler` owner: platform runtime layer.
 - `ProactiveTriggerScheduler` rollback path: disable scheduler startup and replay/wake control surfaces while preserving `proactiveTriggers` config contracts.
 - `PiAgentRunner` owner: platform runtime layer.

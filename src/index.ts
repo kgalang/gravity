@@ -1,5 +1,6 @@
 import process from "node:process";
 import {
+  agentRegistry,
   compiledDeclarations,
   type CompiledMessageEntrypoint,
   type CompiledMessageListener,
@@ -12,6 +13,10 @@ import {
   createKyselyEventIdempotencyRepository,
   type EventIdempotencyGuard,
 } from "./runtime/event-idempotency.js";
+import {
+  createExecutorManager,
+  type ExecutorRuntime,
+} from "./runtime/executor-manager.js";
 import {
   runPiAgentTurn,
   summarizeAgentResponseForRunLog,
@@ -126,6 +131,7 @@ process.on("SIGTERM", () => {
 });
 
 const enableSlackMessageEvents = true;
+const executorManager = createExecutorManager({ enableSandbox: false });
 
 type MessageEntrypoint = CompiledMessageEntrypoint;
 
@@ -157,6 +163,11 @@ function createMessageRunId(sourceEventId: string): string {
 
 function createProactiveRunId(sourceEventId: string): string {
   return sourceEventId;
+}
+
+function resolveAgentRuntimePolicy(agentId: string): ExecutorRuntime {
+  const runtime = agentRegistry.agentsById.get(agentId)?.runtime;
+  return runtime ?? "host";
 }
 
 async function tryAcquireSourceEventLease(
@@ -258,9 +269,11 @@ async function executeAgentRun(
       const runResult = await runPiAgentTurn({
         db: input.db,
         agentId: input.agentId,
+        agentRuntime: resolveAgentRuntimePolicy(input.agentId),
         sessionKey: input.sessionKey,
         prompt: input.prompt,
         anthropicApiKey,
+        executorManager,
       });
 
       const responseText = runResult.responseText;
