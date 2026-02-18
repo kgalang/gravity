@@ -7,8 +7,12 @@
 - Durable file state: `store/` (agent skills, memory, shared connectors, shared knowledge).
 - Ephemeral runtime state: `workspace/` (session logs, compactable context, scratch).
 
+CP5.1 migration note:
+- Runtime behavior source of truth is moving to code-defined agent declarations.
+- `gravity.agents` remains a queryable projection/registry surface, not canonical behavior config.
+
 ## Durable State Contract
-- `gravity.agents`: canonical agent registry.
+- `gravity.agents`: queryable agent registry projection and metadata surface.
 - `gravity.sessions`: canonical session metadata registry (mode/ownership/status).
 - `gravity.runs`: canonical run log and audit surface.
 - `gravity.skill_versions`: canonical skill evolution log.
@@ -24,10 +28,10 @@
 - Cross-session search log: `workspace/{agent-id}/agent-log.jsonl`.
 
 ## Integration Targets
-- Slack Socket Mode routing from slash commands, app mentions, thread replies, and direct messages via `ingressBindings`.
+- Slack Socket Mode routing from slash commands, app mentions, thread replies, and direct messages via compiled code-defined listener declarations.
 - Routed slash command acknowledgements should return `response_type: ephemeral`; runtime then posts a visible root thread message before replying in thread. Unmapped slash commands should acknowledge with `response_type: ephemeral`.
-- Non-slash message triggers are enabled through explicit per-agent ingress bindings.
-- Proactive triggers (`cron`, `heartbeat`) run from `gravity.agents.config.proactiveTriggers` with delivery routing to Slack channel thread or Slack DM user.
+- Non-slash message triggers are enabled through explicit per-agent listener declarations.
+- Proactive triggers (`cron`, `heartbeat`) run from compiled code-defined proactive declarations with delivery routing to Slack channel thread or Slack DM user.
 - Proactive scheduler reconciles missed runs from persisted run history on startup/reload windows and supports manual wake controls for heartbeat triggers.
 - Quiet-hours policy can suppress proactive replay/scheduled runs while allowing explicit manual bypass.
 - Source-event idempotency is enforced before run execution (in-flight guard + `gravity.runs.source_event_id` check).
