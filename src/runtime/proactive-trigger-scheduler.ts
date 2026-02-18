@@ -21,6 +21,11 @@ export type ProactiveTriggerFireEvent = {
   agentId: string;
   triggerId: string;
   kind: ProactiveTriggerKind;
+  trigger: {
+    triggerKind: ProactiveTriggerKind;
+    surface: "system";
+    entrypoint: ProactiveTriggerKind;
+  };
   prompt: string;
   sessionMode: SessionMode;
   delivery: ProactiveDeliveryTarget;
@@ -46,6 +51,9 @@ export type ProactiveTriggerScheduler = {
 type ProactiveTriggerSchedulerConfig = {
   db: Kysely<GravityDatabase>;
   onTrigger: (event: ProactiveTriggerFireEvent) => Promise<void> | void;
+  loadTriggers?: (
+    db: Kysely<GravityDatabase>,
+  ) => Promise<ReadonlyArray<ResolvedProactiveTrigger>>;
   log?: (line: string) => void;
   now?: () => Date;
   enableReplay?: boolean;
@@ -91,6 +99,13 @@ async function loadActiveAgentProactiveRows(
       context: `agentId=${row.id}`,
     }),
   }));
+}
+
+async function loadTriggersFromJsonb(
+  db: Kysely<GravityDatabase>,
+): Promise<ReadonlyArray<ResolvedProactiveTrigger>> {
+  const activeAgents = await loadActiveAgentProactiveRows(db);
+  return resolveProactiveTriggers(activeAgents);
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -317,6 +332,7 @@ function triggerKey(trigger: ResolvedProactiveTrigger): string {
 export function createProactiveTriggerScheduler(
   config: ProactiveTriggerSchedulerConfig,
 ): ProactiveTriggerScheduler {
+  const loadTriggers = config.loadTriggers ?? loadTriggersFromJsonb;
   const log = config.log ?? console.log;
   const now = config.now ?? (() => new Date());
   const enableReplay = config.enableReplay ?? true;
@@ -378,6 +394,11 @@ export function createProactiveTriggerScheduler(
         agentId: trigger.agentId,
         triggerId: trigger.triggerId,
         kind: trigger.kind,
+        trigger: {
+          triggerKind: trigger.kind,
+          surface: "system",
+          entrypoint: trigger.kind,
+        },
         prompt: trigger.prompt,
         sessionMode: trigger.sessionMode,
         delivery: trigger.delivery,
@@ -430,9 +451,8 @@ export function createProactiveTriggerScheduler(
   async function reloadTriggers(): Promise<void> {
     stopHandles();
 
-    const activeAgents = await loadActiveAgentProactiveRows(config.db);
-    const triggers = resolveProactiveTriggers(activeAgents);
-    currentTriggers = triggers;
+    const triggers = await loadTriggers(config.db);
+    currentTriggers = [...triggers];
 
     const nextHandles: ScheduledHandle[] = [];
     for (const trigger of triggers) {

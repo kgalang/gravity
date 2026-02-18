@@ -53,7 +53,7 @@ Gate:
 - `npm run check`
 
 ### Step 4 - Cut over proactive routing + session keys
-Status: next
+Status: complete
 
 Deliverables:
 - Rewire proactive trigger resolution/scheduling to compiled proactive declarations.
@@ -64,7 +64,7 @@ Gate:
 - `npm run check`
 
 ### Step 5 - Consolidate executor seam
-Status: pending
+Status: next
 
 Deliverables:
 - Introduce executor-manager wiring so all tool calls route through one `Executor` seam.
@@ -119,7 +119,9 @@ Gate:
 - Cut over slash command routing in `src/index.ts` to compiled declarations (`compiledDeclarations.ingress.slashCommands`) and removed runtime dependency on legacy slash router map for slash decisions.
 - Cut over app mention/thread reply/DM message ingress resolution in `src/index.ts` to compiled declaration listeners with active-agent DB filtering (`status = active`) and existing channel-affinity/thread-owner behavior preserved.
 - Slash/message trigger dimensions now come directly from compiled declaration trigger contracts at ingress boundaries (no slash/message trigger normalization calls in `src/index.ts`).
-- Proactive routing still runs through legacy DB JSONB resolver seams until Step 4-6 cutovers are complete.
+- Cut over proactive scheduler trigger loading in `src/index.ts` + `src/runtime/proactive-trigger-scheduler.ts` to compiled declarations (`compiledDeclarations.proactive.triggers`) filtered by active DB agent status, removing runtime proactive routing dependency on JSONB resolver/config parsing.
+- Added `src/runtime/session-key.ts` canonical builders and `tests/runtime/session-key.test.ts` coverage for canonical session key patterns across slash/message/proactive modes (main/thread/isolated + DM thread fallback).
+- Proactive trigger dimensions at runtime ingress now come from scheduler-emitted typed trigger dimensions (`event.trigger`) rather than proactive trigger normalization helpers.
 
 ## Parity Matrix (Required)
 - Slash command routing + ack behavior parity.

@@ -22,6 +22,10 @@ import {
   type ProactiveTriggerFireEvent,
   type ProactiveTriggerScheduler,
 } from "./runtime/proactive-trigger-scheduler.js";
+import type {
+  ProactiveQuietHours,
+  ResolvedProactiveTrigger,
+} from "./runtime/proactive-trigger-resolver.js";
 import {
   composeRunLifecycleLoggers,
   createConsoleRunLifecycleLogger,
@@ -33,6 +37,12 @@ import {
   createRunLogStore,
   type RunLogStore,
 } from "./runtime/run-log-store.js";
+import {
+  buildIsolatedSessionKey,
+  buildMessageSessionKey,
+  buildProactiveSessionKey,
+  buildSlashThreadSessionKey,
+} from "./runtime/session-key.js";
 import {
   createKyselySessionCatalogRepository,
   createSessionCatalog,
@@ -46,7 +56,6 @@ import {
   SlackTransport,
 } from "./runtime/slack-transport.js";
 import {
-  normalizeProactiveTrigger,
   normalizeSystemTrigger,
   type NormalizedTrigger,
 } from "./runtime/trigger-normalizer.js";
@@ -142,53 +151,12 @@ function createSlashRunId(sourceEventId: string): string {
   return `slack:${sourceEventId}`;
 }
 
-function createSlashSessionKey(agentId: string, sourceEventId: string): string {
-  return `${agentId}:${sourceEventId}`;
-}
-
 function createMessageRunId(sourceEventId: string): string {
   return `slack:${sourceEventId}`;
 }
 
 function createProactiveRunId(sourceEventId: string): string {
   return sourceEventId;
-}
-
-function createMessageSessionKey(input: {
-  agentId: string;
-  message: InboundSlackMessage;
-  sessionMode: SessionMode;
-}): string {
-  if (input.sessionMode === "main") {
-    return `${input.agentId}:main`;
-  }
-
-  if (input.sessionMode === "isolated") {
-    return `${input.agentId}:${input.message.sourceEventId}`;
-  }
-
-  if (input.message.isDirectMessage) {
-    return `${input.agentId}:${input.message.channelId}`;
-  }
-
-  return `${input.agentId}:${input.message.threadTs}`;
-}
-
-function createProactiveSessionKey(input: {
-  agentId: string;
-  triggerId: string;
-  sourceEventId: string;
-  sessionMode: SessionMode;
-}): string {
-  if (input.sessionMode === "main") {
-    return `${input.agentId}:main`;
-  }
-
-  if (input.sessionMode === "thread") {
-    return `${input.agentId}:proactive:${input.triggerId}:thread`;
-  }
-
-  return `${input.agentId}:proactive:${input.triggerId}:${input.sourceEventId}`;
 }
 
 async function tryAcquireSourceEventLease(
@@ -426,6 +394,83 @@ async function loadActiveAgentChannels(
     byAgentId.set(row.id, row.channel_id);
   }
   return byAgentId;
+}
+
+async function loadActiveAgentIds(
+  dbClient: ReturnType<typeof createDb>,
+): Promise<Set<string>> {
+  const rows = await gravitySchema(dbClient)
+    .selectFrom("agents")
+    .select(["id"])
+    .where("status", "=", "active")
+    .execute();
+
+  return new Set(rows.map((row) => row.id));
+}
+
+function toProactiveQuietHours(
+  quietHours: typeof compiledDeclarations.proactive.triggers[number]["quietHours"],
+): ProactiveQuietHours | undefined {
+  if (!quietHours) {
+    return undefined;
+  }
+
+  return {
+    timezone: quietHours.timezone,
+    startHour: quietHours.startHour,
+    endHour: quietHours.endHour,
+    ...(quietHours.daysOfWeek
+      ? {
+          daysOfWeek: [...quietHours.daysOfWeek],
+        }
+      : {}),
+  };
+}
+
+function compileProactiveTriggersForActiveAgents(
+  activeAgentIds: ReadonlySet<string>,
+): ResolvedProactiveTrigger[] {
+  const triggers: ResolvedProactiveTrigger[] = [];
+  for (const trigger of compiledDeclarations.proactive.triggers) {
+    if (!activeAgentIds.has(trigger.agentId)) {
+      continue;
+    }
+
+    const quietHours = toProactiveQuietHours(trigger.quietHours);
+    if (trigger.kind === "cron") {
+      triggers.push({
+        agentId: trigger.agentId,
+        triggerId: trigger.triggerId,
+        kind: "cron",
+        schedule: trigger.schedule,
+        prompt: trigger.prompt,
+        sessionMode: trigger.sessionMode,
+        delivery: trigger.delivery,
+        ...(quietHours ? { quietHours } : {}),
+      });
+      continue;
+    }
+
+    triggers.push({
+      agentId: trigger.agentId,
+      triggerId: trigger.triggerId,
+      kind: "heartbeat",
+      intervalSeconds: trigger.intervalSeconds,
+      prompt: trigger.prompt,
+      sessionMode: trigger.sessionMode,
+      delivery: trigger.delivery,
+      ...(quietHours ? { quietHours } : {}),
+    });
+  }
+
+  return triggers;
+}
+
+async function loadActiveCompiledProactiveTriggers(
+  dbClient: ReturnType<typeof createDb>,
+): Promise<ReadonlyArray<ResolvedProactiveTrigger>> {
+  const activeAgentIds = await loadActiveAgentIds(dbClient);
+  return compileProactiveTriggersForActiveAgents(activeAgentIds);
 }
 
 function deriveMessageEntrypoint(
@@ -787,9 +832,13 @@ async function handleProactiveTrigger(
   }
 
   try {
-    const normalizedTrigger = normalizeProactiveTrigger(event.kind);
+    const normalizedTrigger: NormalizedTrigger = {
+      triggerKind: event.trigger.triggerKind,
+      surface: event.trigger.surface,
+      entrypoint: event.trigger.entrypoint,
+    };
     const runId = createProactiveRunId(event.sourceEventId);
-    const sessionKey = createProactiveSessionKey({
+    const sessionKey = buildProactiveSessionKey({
       agentId: event.agentId,
       triggerId: event.triggerId,
       sourceEventId: event.sourceEventId,
@@ -934,7 +983,10 @@ async function handleInboundSlashCommand(
     if (decision.manualWake) {
       const manualWakeDecision = decision.manualWake;
       const runId = createSlashRunId(command.sourceEventId);
-      const sessionKey = createSlashSessionKey(activeAgentId, command.sourceEventId);
+      const sessionKey = buildIsolatedSessionKey(
+        activeAgentId,
+        command.sourceEventId,
+      );
       let resultSummary = "manual wake requested";
       const persistenceLogger = activeRunLogStore.createLifecycleLogger({
         query: decision.query,
@@ -994,7 +1046,6 @@ async function handleInboundSlashCommand(
     }
 
     const runId = createSlashRunId(command.sourceEventId);
-    const sessionKey = createSlashSessionKey(activeAgentId, command.sourceEventId);
     const fullPrompt = command.text.trim();
     const threadRootText = [
       `Running ${command.command} for <@${command.userId}>. Replying in thread.`,
@@ -1005,6 +1056,7 @@ async function handleInboundSlashCommand(
       command.channelId,
       threadRootText,
     );
+    const sessionKey = buildSlashThreadSessionKey(activeAgentId, threadTs);
 
     logDebug("slash.session.init", {
       sourceEventId: command.sourceEventId,
@@ -1174,10 +1226,13 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
     const runId = createMessageRunId(message.sourceEventId);
     const sessionKey =
       decision.sessionKeyOverride ??
-      createMessageSessionKey({
+      buildMessageSessionKey({
         agentId: resolvedAgentId,
-        message,
+        channelId: message.channelId,
+        threadTs: message.threadTs,
+        sourceEventId: message.sourceEventId,
         sessionMode: resolvedSessionMode,
+        isDirectMessage: message.isDirectMessage,
       });
 
     logDebug("message.session.bind", {
@@ -1300,6 +1355,7 @@ try {
 
     proactiveTriggerScheduler = createProactiveTriggerScheduler({
       db: dbClient,
+      loadTriggers: loadActiveCompiledProactiveTriggers,
       onTrigger: handleProactiveTrigger,
     });
     await proactiveTriggerScheduler.start();
