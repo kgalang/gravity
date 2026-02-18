@@ -61,6 +61,29 @@ const DeliveryTargetSchema = Type.Union([
   SlackDmDeliverySchema,
 ]);
 
+const QuietHoursSchema = Type.Object(
+  {
+    enabled: Type.Optional(Type.Boolean()),
+    timezone: Type.String(),
+    startHour: Type.Integer({ minimum: 0, maximum: 23 }),
+    endHour: Type.Integer({ minimum: 0, maximum: 23 }),
+    daysOfWeek: Type.Optional(
+      Type.Array(Type.Integer({ minimum: 0, maximum: 6 }), {
+        minItems: 1,
+        maxItems: 7,
+      }),
+    ),
+  },
+  { additionalProperties: true },
+);
+
+const PolicySchema = Type.Object(
+  {
+    quietHours: Type.Optional(QuietHoursSchema),
+  },
+  { additionalProperties: true },
+);
+
 const CronProactiveTriggerSchema = Type.Object(
   {
     id: Type.String(),
@@ -99,6 +122,7 @@ const AgentConfigSchema = Type.Object(
     ingressBindings: Type.Optional(Type.Array(IngressBindingSchema)),
     deliveryDefaults: Type.Optional(DeliveryTargetSchema),
     proactiveTriggers: Type.Optional(Type.Array(ProactiveTriggerSchema)),
+    policy: Type.Optional(PolicySchema),
   },
   { additionalProperties: true },
 );
@@ -109,6 +133,8 @@ export type AgentIngressBindingMatch = Static<typeof IngressBindingMatchSchema>;
 export type AgentIngressBinding = Static<typeof IngressBindingSchema>;
 export type AgentDeliveryTarget = Static<typeof DeliveryTargetSchema>;
 export type AgentProactiveTrigger = Static<typeof ProactiveTriggerSchema>;
+export type AgentQuietHoursPolicy = Static<typeof QuietHoursSchema>;
+export type AgentPolicy = Static<typeof PolicySchema>;
 export type AgentConfig = Static<typeof AgentConfigSchema>;
 export type ParseAgentConfigOptions = {
   warn?: (line: string) => void;
@@ -288,6 +314,45 @@ function normalizeProactiveTrigger(
   };
 }
 
+function normalizeQuietHours(
+  rawQuietHours: AgentQuietHoursPolicy,
+): AgentQuietHoursPolicy | null {
+  const timezone = normalizeString(rawQuietHours.timezone);
+  if (!timezone) {
+    return null;
+  }
+
+  const daysOfWeek = rawQuietHours.daysOfWeek
+    ? Array.from(new Set(rawQuietHours.daysOfWeek))
+    : undefined;
+  if (daysOfWeek && daysOfWeek.length === 0) {
+    return null;
+  }
+
+  return {
+    enabled: rawQuietHours.enabled ?? true,
+    timezone,
+    startHour: rawQuietHours.startHour,
+    endHour: rawQuietHours.endHour,
+    daysOfWeek,
+  };
+}
+
+function normalizePolicy(rawPolicy: AgentPolicy): AgentPolicy | null {
+  if (!rawPolicy.quietHours) {
+    return {};
+  }
+
+  const quietHours = normalizeQuietHours(rawPolicy.quietHours);
+  if (!quietHours) {
+    return null;
+  }
+
+  return {
+    quietHours,
+  };
+}
+
 export function parseAgentConfig(
   value: unknown,
   options: ParseAgentConfigOptions = {},
@@ -386,6 +451,16 @@ export function parseAgentConfig(
     }
 
     normalized.proactiveTriggers = proactiveTriggers;
+  }
+
+  if (raw.policy !== undefined) {
+    const policy = normalizePolicy(raw.policy);
+    if (!policy) {
+      warnOnce(options, "invalid `policy` after normalization; disabling config");
+      return {};
+    }
+
+    normalized.policy = policy;
   }
 
   return normalized;

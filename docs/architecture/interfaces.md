@@ -8,7 +8,7 @@ Keep moving parts explicit and replaceable.
 - `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): current Slack slash-command resolver seam; expected to converge into `IngressBindingResolver` as config-driven ingress matures.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
 - `TriggerNormalizer` (`src/runtime/trigger-normalizer.ts`): normalizes source events into trigger dimensions (`triggerKind`, `surface`, `entrypoint`).
-- `AgentConfig` (`src/runtime/agent-config.ts`): validates and normalizes agent `config` payloads (`ingressBindings`, `deliveryDefaults`, `proactiveTriggers`) into typed runtime contracts with strict fail-closed behavior on invalid config.
+- `AgentConfig` (`src/runtime/agent-config.ts`): validates and normalizes agent `config` payloads (`ingressBindings`, `deliveryDefaults`, `proactiveTriggers`, `policy.quietHours`) into typed runtime contracts with strict fail-closed behavior on invalid config.
 - `AgentSpecRepository`: loads `gravity.agents` + MVP `config` into a typed `AgentSpec`.
 - `IngressBindingResolver`: enforces `ingressBindings` for Slack entrypoints (slash command, app mention, thread reply, direct message).
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
@@ -24,8 +24,8 @@ Keep moving parts explicit and replaceable.
 - `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
 - `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
 - `ToolDispatcher`: single dispatch seam for all tool execution (host now, sandbox later).
-- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): resolves `proactiveTriggers` + `deliveryDefaults` into validated cron/heartbeat trigger specs.
-- `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers and dispatches proactive runs.
+- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): resolves `proactiveTriggers` + `deliveryDefaults` + optional quiet-hours policy into validated cron/heartbeat trigger specs.
+- `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
 
 ## Non-Goals for Current Bootstrap
 - No full multi-surface adapter set beyond Slack yet.
@@ -59,7 +59,7 @@ Keep moving parts explicit and replaceable.
 - `RunLogStore` owner: platform runtime layer.
 - `RunLogStore` rollback path: keep lifecycle log lines but disable `gravity.runs` writes from `src/index.ts` while retaining the DB schema contract.
 - `ProactiveTriggerScheduler` owner: platform runtime layer.
-- `ProactiveTriggerScheduler` rollback path: disable scheduler startup while preserving `proactiveTriggers` config contracts and manual trigger paths.
+- `ProactiveTriggerScheduler` rollback path: disable scheduler startup and replay/wake control surfaces while preserving `proactiveTriggers` config contracts.
 - `PiAgentRunner` owner: platform runtime layer.
 - `PiAgentRunner` rollback path: revert inbound execution paths to deterministic echo-only behavior while preserving `RunLifecycleLogger` + `RunLogStore` contracts.
 

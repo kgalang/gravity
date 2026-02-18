@@ -37,6 +37,14 @@ describe("parseAgentConfig", () => {
           },
         },
       ],
+      policy: {
+        quietHours: {
+          timezone: " America/Los_Angeles ",
+          startHour: 22,
+          endHour: 7,
+          daysOfWeek: [1, 2, 2, 3],
+        },
+      },
     });
 
     expect(parsed).toEqual({
@@ -75,6 +83,15 @@ describe("parseAgentConfig", () => {
           },
         },
       ],
+      policy: {
+        quietHours: {
+          enabled: true,
+          timezone: "America/Los_Angeles",
+          startHour: 22,
+          endHour: 7,
+          daysOfWeek: [1, 2, 3],
+        },
+      },
     });
   });
 
@@ -127,5 +144,19 @@ describe("parseAgentConfig", () => {
     expect(parseAgentConfig(null)).toEqual({});
     expect(parseAgentConfig("invalid")).toEqual({});
     expect(parseAgentConfig(42)).toEqual({});
+  });
+
+  it("fails closed for invalid quiet-hours policy", () => {
+    const parsed = parseAgentConfig({
+      policy: {
+        quietHours: {
+          timezone: "   ",
+          startHour: 22,
+          endHour: 7,
+        },
+      },
+    });
+
+    expect(parsed).toEqual({});
   });
 });

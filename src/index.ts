@@ -322,6 +322,9 @@ type SlashCommandDecision = {
   agentId: string | null;
   query: string;
   ackResponse: SlackSlashCommandAckResponse;
+  manualWake: {
+    triggerId?: string;
+  } | null;
 };
 
 type MessageDecision = {
@@ -346,6 +349,32 @@ function resolveSlashCommandDecision(
       agentId: null,
       query,
       ackResponse: buildUnmappedSlashCommandEchoResponse(command),
+      manualWake: null,
+    };
+  }
+
+  const normalizedText = command.text.trim();
+  const wakeTokens = normalizedText.split(/\s+/).filter((token) => token.length > 0);
+  const isWakeCommand = wakeTokens[0] === "!wake";
+  const wakeTriggerId = wakeTokens.length > 1 ? wakeTokens[1] : undefined;
+  const manualWake =
+    isWakeCommand && wakeTokens.length <= 2
+      ? {
+          triggerId: wakeTriggerId,
+        }
+      : null;
+  if (manualWake) {
+    const triggerLabel = manualWake.triggerId
+      ? ` trigger \`${manualWake.triggerId}\``
+      : " all heartbeat triggers";
+    return {
+      agentId,
+      query,
+      manualWake,
+      ackResponse: {
+        response_type: "ephemeral",
+        text: `Gravity requested manual proactive wake for ${agentId}${triggerLabel}.`,
+      },
     };
   }
 
@@ -353,6 +382,7 @@ function resolveSlashCommandDecision(
     agentId,
     query,
     ackResponse: buildSlashCommandEchoResponse(command, agentId),
+    manualWake: null,
   };
 }
 
@@ -607,6 +637,7 @@ async function handleProactiveTrigger(
     logDebug("proactive.fire", {
       sourceEventId: event.sourceEventId,
       firedAt: event.firedAt.toISOString(),
+      origin: event.origin,
       agentId: event.agentId,
       triggerId: event.triggerId,
       kind: event.kind,
@@ -643,7 +674,10 @@ async function handleProactiveTrigger(
         channelId: delivery.channelId,
         threadTs: delivery.threadTs,
         userId: delivery.ownerUserId,
-        policyDecisions: delivery.policyDecisions,
+        policyDecisions: {
+          ...delivery.policyDecisions,
+          proactive_origin: event.origin,
+        },
       },
       onResponse: async (responseText) => {
         await deliverProactiveResponse({
@@ -670,6 +704,7 @@ async function handleProactiveTrigger(
         agentId: event.agentId,
         triggerId: event.triggerId,
         kind: event.kind,
+        origin: event.origin,
         runId,
         sessionKey,
         channelId: delivery.channelId,
@@ -730,8 +765,34 @@ async function handleInboundSlashCommand(
   const activeAgentId = decision.agentId;
   const activeSessionCatalog = sessionCatalog;
   const normalizedTrigger = normalizeSlackSlashCommandTrigger();
+  const activeScheduler = proactiveTriggerScheduler;
 
   try {
+    if (decision.manualWake) {
+      if (!activeScheduler) {
+        console.log(
+          `[gravity] manual wake ignored (scheduler unavailable sourceEventId=${command.sourceEventId} agentId=${activeAgentId})`,
+        );
+        return;
+      }
+
+      const firedCount = await activeScheduler.wake({
+        agentId: activeAgentId,
+        kind: "heartbeat",
+        triggerId: decision.manualWake.triggerId,
+        bypassQuietHours: true,
+      });
+      console.log(
+        `[gravity] manual wake handled ${JSON.stringify({
+          sourceEventId: command.sourceEventId,
+          agentId: activeAgentId,
+          triggerId: decision.manualWake.triggerId ?? null,
+          firedCount,
+        })}`,
+      );
+      return;
+    }
+
     const runId = createSlashRunId(command.sourceEventId);
     const sessionKey = createSlashSessionKey(activeAgentId, command.sourceEventId);
     const fullPrompt = command.text.trim();

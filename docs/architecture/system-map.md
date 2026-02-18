@@ -28,6 +28,8 @@
 - Routed slash command acknowledgements should return `response_type: ephemeral`; runtime then posts a visible root thread message before replying in thread. Unmapped slash commands should acknowledge with `response_type: ephemeral`.
 - Non-slash message triggers are enabled through explicit per-agent ingress bindings.
 - Proactive triggers (`cron`, `heartbeat`) run from `gravity.agents.config.proactiveTriggers` with delivery routing to Slack channel thread or Slack DM user.
+- Proactive scheduler reconciles missed runs from persisted run history on startup/reload windows and supports manual wake controls for heartbeat triggers.
+- Quiet-hours policy can suppress proactive replay/scheduled runs while allowing explicit manual bypass.
 - Source-event idempotency is enforced before run execution (in-flight guard + `gravity.runs.source_event_id` check).
 - Claude API loop with compaction and tool-result truncation from `mvp_requirements.md`.
 - DuckDB connector at `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb` for Wiggs.
