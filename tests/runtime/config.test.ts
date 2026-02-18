@@ -12,6 +12,7 @@ describe("loadConfig", () => {
       livenessIntervalSeconds: 30,
       slackAppToken: null,
       slackBotToken: null,
+      anthropicApiKey: null,
     });
   });
 
@@ -28,6 +29,7 @@ describe("loadConfig", () => {
       livenessIntervalSeconds: 45,
       slackAppToken: null,
       slackBotToken: null,
+      anthropicApiKey: null,
     });
   });
 
@@ -35,10 +37,12 @@ describe("loadConfig", () => {
     const config = loadConfig({
       SLACK_APP_TOKEN: "  xapp-abc  ",
       SLACK_BOT_TOKEN: "",
+      ANTHROPIC_API_KEY: "  key-123  ",
     });
 
     expect(config.slackAppToken).toBe("xapp-abc");
     expect(config.slackBotToken).toBeNull();
+    expect(config.anthropicApiKey).toBe("key-123");
   });
 
   it("throws on invalid liveness interval values", () => {

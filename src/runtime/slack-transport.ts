@@ -427,6 +427,19 @@ export class SlackTransport {
     return result.ts;
   }
 
+  async postChannelMessage(channelId: string, text: string): Promise<string> {
+    const result = await this.webClient.chat.postMessage({
+      channel: channelId,
+      text,
+    });
+
+    if (!result.ts) {
+      throw new Error("Slack postMessage response missing ts");
+    }
+
+    return result.ts;
+  }
+
   getBotUserId(): string | null {
     return this.botUserId;
   }

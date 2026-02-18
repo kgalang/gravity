@@ -2,6 +2,10 @@ import process from "node:process";
 import { loadConfig } from "./runtime/config.js";
 import { createDb, destroyDb } from "./runtime/db.js";
 import {
+  runPiAgentTurn,
+  summarizeAgentResponseForRunLog,
+} from "./runtime/pi-agent-runner.js";
+import {
   composeRunLifecycleLoggers,
   createConsoleRunLifecycleLogger,
   createRunContext,
@@ -36,6 +40,7 @@ let livenessTicker: NodeJS.Timeout | null = null;
 let slackTransport: SlackTransport | null = null;
 let dbClient: ReturnType<typeof createDb> | null = null;
 let runLogStore: RunLogStore | null = null;
+let anthropicApiKey: string | null = null;
 let isShuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
@@ -60,6 +65,7 @@ async function shutdown(signal: string): Promise<void> {
   }
 
   runLogStore = null;
+  anthropicApiKey = null;
 
   console.log(`[gravity] received ${signal}; shutdown complete`);
   process.exit(0);
@@ -94,7 +100,7 @@ function buildSlashCommandEchoResponse(
   const normalizedText = command.text.length > 0 ? command.text : "(no text)";
   return {
     response_type: "in_channel",
-    text: `Gravity routed ${command.command} to ${agentId}. Input: ${normalizedText}`,
+    text: `Gravity routed ${command.command} to ${agentId}. Working on: ${normalizedText}`,
   };
 }
 
@@ -156,14 +162,23 @@ async function handleInboundSlashCommand(
   if (!runLogStore) {
     throw new Error("Run log store is not initialized");
   }
+  if (!dbClient) {
+    throw new Error("DB client is not initialized");
+  }
+  if (!slackTransport) {
+    throw new Error("Slack transport is not initialized");
+  }
+  const activeDbClient = dbClient;
+  const activeSlackTransport = slackTransport;
+  const activeAgentId = decision.agentId;
 
   const runId = createSlashRunId(command.sourceEventId);
-  const sessionKey = createSlashSessionKey(decision.agentId, command.sourceEventId);
+  const sessionKey = createSlashSessionKey(activeAgentId, command.sourceEventId);
   let resultSummary: string | null = null;
 
   const runContext = createRunContext({
     runId,
-    agentId: decision.agentId,
+    agentId: activeAgentId,
     sessionKey,
     source: "slack",
   });
@@ -184,9 +199,28 @@ async function handleInboundSlashCommand(
     runContext,
     composeRunLifecycleLoggers([lifecycleLogger, persistenceLogger]),
     async () => {
-      resultSummary = decision.ackResponse.text;
+      const runResult = await runPiAgentTurn({
+        db: activeDbClient,
+        agentId: activeAgentId,
+        sessionKey,
+        prompt: command.text,
+        anthropicApiKey,
+      });
+
+      const responseText = runResult.responseText;
+      resultSummary = summarizeAgentResponseForRunLog(responseText);
+
+      await activeSlackTransport.postChannelMessage(command.channelId, responseText);
+
       console.log(
-        `[gravity] slash routed ${JSON.stringify({ ...command, agentId: decision.agentId, runId, sessionKey, responseType: decision.ackResponse.response_type })}`,
+        `[gravity] slash handled ${JSON.stringify({
+          ...command,
+          agentId: activeAgentId,
+          runId,
+          sessionKey,
+          modelId: runResult.modelId,
+          responseType: decision.ackResponse.response_type,
+        })}`,
       );
     },
   );
@@ -200,6 +234,7 @@ try {
     console.log(`[gravity] bootstrap started at ${startedAt}`);
     console.log(`[gravity] env=${config.env}`);
     console.log(`[gravity] database=${config.databaseUrl}`);
+    anthropicApiKey = config.anthropicApiKey;
     console.log("[gravity] runtime scaffold active");
     dbClient = createDb(config.databaseUrl);
     runLogStore = createRunLogStore(createKyselyRunLogRepository(dbClient));
