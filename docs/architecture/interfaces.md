@@ -8,6 +8,7 @@ Keep moving parts explicit and replaceable.
 - `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): current Slack slash-command resolver seam; expected to converge into `IngressBindingResolver` as config-driven ingress matures.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
 - `TriggerNormalizer` (`src/runtime/trigger-normalizer.ts`): normalizes source events into trigger dimensions (`triggerKind`, `surface`, `entrypoint`).
+- `AgentConfig` (`src/runtime/agent-config.ts`): validates and normalizes agent `config` payloads (`ingressBindings`, `deliveryDefaults`, `proactiveTriggers`) into typed runtime contracts with strict fail-closed behavior on invalid config.
 - `AgentSpecRepository`: loads `gravity.agents` + MVP `config` into a typed `AgentSpec`.
 - `IngressBindingResolver`: enforces `ingressBindings` for Slack entrypoints (slash command, app mention, thread reply, direct message).
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
@@ -41,6 +42,8 @@ Keep moving parts explicit and replaceable.
 - `TriggerNormalizer` rollback path: temporarily route Slack ingress directly to runtime handlers while preserving run lifecycle and stable IDs.
 - `EventIdempotencyGuard` owner: platform runtime layer.
 - `EventIdempotencyGuard` rollback path: disable runtime pre-run duplicate checks and rely on `gravity.runs.source_event_id` uniqueness only.
+- `AgentConfig` owner: platform runtime layer.
+- `AgentConfig` rollback path: parse minimally typed config directly in repository/runtime call sites while preserving `gravity.agents.config` JSON shape.
 - `AgentSpecRepository` owner: platform runtime layer.
 - `AgentSpecRepository` rollback path: read minimal agent fields directly from `gravity.agents` and ignore advanced config blocks.
 - `SessionResolver` owner: platform runtime layer.

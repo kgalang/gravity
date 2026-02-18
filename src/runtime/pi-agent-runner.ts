@@ -16,6 +16,7 @@ import {
 import { type Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { Kysely } from "kysely";
+import { parseAgentConfig, type AgentConfig } from "./agent-config.js";
 import { gravitySchema, type GravityDatabase } from "./db.js";
 
 const DEFAULT_ANTHROPIC_MODEL_ID = "claude-opus-4-6";
@@ -29,7 +30,7 @@ type AgentRuntimeRecord = {
   model: string;
   skills_path: string | null;
   memory_path: string | null;
-  config: Record<string, unknown>;
+  config: AgentConfig;
 };
 
 type LoadedDocument = {
@@ -388,7 +389,10 @@ async function loadAgentRuntimeRecord(
 
   return {
     ...row,
-    config: isRecord(row.config) ? row.config : {},
+    config: parseAgentConfig(row.config, {
+      warn: console.warn,
+      context: `agentId=${row.id}`,
+    }),
   };
 }
 
@@ -423,8 +427,8 @@ export async function runPiAgentTurn(
   const normalizedPrompt = normalizeUserPrompt(input.prompt);
   const skillPath = asStringOrNull(agent.skills_path);
   const memoryPath = asStringOrNull(agent.memory_path);
-  const connectorName = asStringOrNull(agent.config.connector);
-  const duckdbPath = asStringOrNull(agent.config.duckdb_path);
+  const connectorName = agent.config.connector ?? null;
+  const duckdbPath = agent.config.duckdb_path ?? null;
 
   const sharedSkillsDir = resolvePathFromRepoRoot("store/shared/skills");
   const sharedConnectorsDir = resolvePathFromRepoRoot("store/shared/connectors");
