@@ -8,12 +8,12 @@ Keep moving parts explicit and replaceable.
 - `defineConfig` / `defineAgent` contracts (`agents/contracts.ts`): canonical code-defined configuration and agent declaration authoring model.
 - `AgentRegistry` (`agents/index.ts`): typed registry assembly with duplicate `agentId` and slash-command collision guards.
 - `CompiledAgentDeclarations` (`agents/index.ts`): code-defined ingress/proactive/session declarations compiled from `defineConfig` + `defineAgent` contracts for runtime cutover.
-- `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): legacy slash resolver seam targeted for removal in CP5.1.
+- `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): legacy slash resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 3; targeted for removal in CP5.1 Step 6.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
 - `TriggerNormalizer` (`src/runtime/trigger-normalizer.ts`): legacy trigger-normalization seam targeted for removal in CP5.1 once typed trigger dimensions are emitted directly at ingress/proactive boundaries.
 - `AgentConfig` (`src/runtime/agent-config.ts`): legacy JSONB config normalization seam targeted for removal in CP5.1.
 - `AgentSpecRepository`: transitional repository seam while behavior source moves off `gravity.agents.config`.
-- `IngressBindingResolver`: legacy ingress-binding resolver seam targeted for removal in CP5.1.
+- `IngressBindingResolver`: legacy ingress-binding resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 3; targeted for removal in CP5.1 Step 6.
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
 - `SessionResolver`: resolves `sessionKey` and session mode (`thread`, `main`, `isolated`) per trigger.
 - `SessionCatalog`: stores and resolves session metadata in `gravity.sessions` (ownership, mode, status) while keeping full transcript/context in `workspace/` files.

@@ -42,7 +42,7 @@ Gate:
 - `npm run check`
 
 ### Step 3 - Cut over slash + message ingress routing
-Status: next
+Status: complete
 
 Deliverables:
 - Rewire slash routing to compiled listener declarations.
@@ -53,7 +53,7 @@ Gate:
 - `npm run check`
 
 ### Step 4 - Cut over proactive routing + session keys
-Status: pending
+Status: next
 
 Deliverables:
 - Rewire proactive trigger resolution/scheduling to compiled proactive declarations.
@@ -116,7 +116,10 @@ Gate:
   - session dimensions (`sessionKey` pattern contracts),
   - trigger dimensions (`triggerKind`, `surface`, `entrypoint`, `runId` pattern).
 - Added Step 2 unit coverage in `tests/agents/index.test.ts` for compiled declarations, proactive/session dimension compilation, and fail-closed proactive delivery checks.
-- Runtime routing/resolution still runs through legacy DB JSONB resolver seams until Step 3-6 cutovers are complete.
+- Cut over slash command routing in `src/index.ts` to compiled declarations (`compiledDeclarations.ingress.slashCommands`) and removed runtime dependency on legacy slash router map for slash decisions.
+- Cut over app mention/thread reply/DM message ingress resolution in `src/index.ts` to compiled declaration listeners with active-agent DB filtering (`status = active`) and existing channel-affinity/thread-owner behavior preserved.
+- Slash/message trigger dimensions now come directly from compiled declaration trigger contracts at ingress boundaries (no slash/message trigger normalization calls in `src/index.ts`).
+- Proactive routing still runs through legacy DB JSONB resolver seams until Step 4-6 cutovers are complete.
 
 ## Parity Matrix (Required)
 - Slash command routing + ack behavior parity.

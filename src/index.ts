@@ -1,6 +1,11 @@
 import process from "node:process";
+import {
+  compiledDeclarations,
+  type CompiledMessageEntrypoint,
+  type CompiledMessageListener,
+  type CompiledTriggerDimensions,
+} from "../agents/index.js";
 import { loadConfig } from "./runtime/config.js";
-import { parseAgentConfig } from "./runtime/agent-config.js";
 import { createDb, destroyDb, gravitySchema } from "./runtime/db.js";
 import {
   createEventIdempotencyGuard,
@@ -29,11 +34,6 @@ import {
   type RunLogStore,
 } from "./runtime/run-log-store.js";
 import {
-  resolveMessageIngress,
-  type ActiveAgentIngressRow,
-  type MessageEntrypoint,
-} from "./runtime/ingress-binding-resolver.js";
-import {
   createKyselySessionCatalogRepository,
   createSessionCatalog,
   type SessionMode,
@@ -46,13 +46,7 @@ import {
   SlackTransport,
 } from "./runtime/slack-transport.js";
 import {
-  createDefaultSlashCommandAgentMap,
-  resolveAgentIdForSlashCommand,
-} from "./runtime/slash-command-router.js";
-import {
   normalizeProactiveTrigger,
-  normalizeSlackMessageTrigger,
-  normalizeSlackSlashCommandTrigger,
   normalizeSystemTrigger,
   type NormalizedTrigger,
 } from "./runtime/trigger-normalizer.js";
@@ -122,11 +116,26 @@ process.on("SIGTERM", () => {
   void shutdown("SIGTERM");
 });
 
-const slashCommandAgentMap = createDefaultSlashCommandAgentMap();
 const enableSlackMessageEvents = true;
+
+type MessageEntrypoint = CompiledMessageEntrypoint;
 
 function logDebug(event: string, payload: Record<string, unknown>): void {
   console.log(`[gravity][debug] ${event} ${JSON.stringify(payload)}`);
+}
+
+function normalizeSlashCommand(command: string): string {
+  return command.trim().toLowerCase();
+}
+
+function toNormalizedTrigger(
+  dimensions: CompiledTriggerDimensions,
+): NormalizedTrigger {
+  return {
+    triggerKind: dimensions.triggerKind,
+    surface: dimensions.surface,
+    entrypoint: dimensions.entrypoint,
+  };
 }
 
 function createSlashRunId(sourceEventId: string): string {
@@ -321,6 +330,7 @@ function buildUnmappedSlashCommandEchoResponse(
 type SlashCommandDecision = {
   agentId: string | null;
   query: string;
+  trigger: NormalizedTrigger | null;
   ackResponse: SlackSlashCommandAckResponse;
   manualWake: {
     triggerId?: string;
@@ -331,6 +341,7 @@ type MessageDecision = {
   agentId: string | null;
   entrypoint: MessageEntrypoint | null;
   sessionMode: SessionMode | null;
+  trigger: NormalizedTrigger | null;
   sessionKeyOverride: string | null;
   query: string;
   route: "binding" | "unmapped";
@@ -340,18 +351,21 @@ function resolveSlashCommandDecision(
   command: InboundSlackSlashCommand,
 ): SlashCommandDecision {
   const query = buildSlashCommandQuery(command);
-  const agentId = resolveAgentIdForSlashCommand(
-    command.command,
-    slashCommandAgentMap,
-  );
-  if (!agentId) {
+  const compiledSlashListener =
+    compiledDeclarations.ingress.slashCommands[
+      normalizeSlashCommand(command.command)
+    ];
+  if (!compiledSlashListener) {
     return {
       agentId: null,
       query,
+      trigger: null,
       ackResponse: buildUnmappedSlashCommandEchoResponse(command),
       manualWake: null,
     };
   }
+  const agentId = compiledSlashListener.agentId;
+  const trigger = toNormalizedTrigger(compiledSlashListener.trigger);
 
   const normalizedText = command.text.trim();
   const wakeTokens = normalizedText.split(/\s+/).filter((token) => token.length > 0);
@@ -370,6 +384,7 @@ function resolveSlashCommandDecision(
     return {
       agentId,
       query,
+      trigger,
       manualWake,
       ackResponse: {
         response_type: "ephemeral",
@@ -381,6 +396,7 @@ function resolveSlashCommandDecision(
   return {
     agentId,
     query,
+    trigger,
     ackResponse: buildSlashCommandEchoResponse(command, agentId),
     manualWake: null,
   };
@@ -396,23 +412,165 @@ function buildMessageQuery(message: InboundSlackMessage): string {
   return message.text.trim();
 }
 
-async function loadActiveAgentIngressRows(
+async function loadActiveAgentChannels(
   dbClient: ReturnType<typeof createDb>,
-): Promise<ActiveAgentIngressRow[]> {
+): Promise<Map<string, string | null>> {
   const rows = await gravitySchema(dbClient)
     .selectFrom("agents")
-    .select(["id", "channel_id", "config"])
+    .select(["id", "channel_id"])
     .where("status", "=", "active")
     .execute();
 
-  return rows.map((row) => ({
-    id: row.id,
-    channel_id: row.channel_id,
-    config: parseAgentConfig(row.config, {
-      warn: console.warn,
-      context: `agentId=${row.id}`,
-    }),
-  }));
+  const byAgentId = new Map<string, string | null>();
+  for (const row of rows) {
+    byAgentId.set(row.id, row.channel_id);
+  }
+  return byAgentId;
+}
+
+function deriveMessageEntrypoint(
+  message: InboundSlackMessage,
+): MessageEntrypoint | null {
+  if (message.surface === "app_mention") {
+    return "app_mention";
+  }
+
+  if (message.threadTs !== message.messageTs) {
+    return "thread_reply";
+  }
+
+  if (message.isDirectMessage) {
+    return "direct_message";
+  }
+
+  return null;
+}
+
+function messageListenerMatches(input: {
+  listener: CompiledMessageListener;
+  message: InboundSlackMessage;
+  entrypoint: MessageEntrypoint;
+  threadOwnerAgentId: string | null;
+}): boolean {
+  const { listener, message, entrypoint, threadOwnerAgentId } = input;
+
+  if (listener.entrypoint !== entrypoint) {
+    return false;
+  }
+
+  const match = listener.match;
+  if (!match) {
+    return true;
+  }
+
+  const matchChannelId = match.channelId;
+  if (matchChannelId && matchChannelId !== message.channelId) {
+    return false;
+  }
+
+  const matchUserId = match.userId;
+  if (matchUserId && matchUserId !== message.userId) {
+    return false;
+  }
+
+  const matchIsDirectMessage = match.isDirectMessage;
+  if (
+    matchIsDirectMessage !== undefined &&
+    matchIsDirectMessage !== message.isDirectMessage
+  ) {
+    return false;
+  }
+
+  const matchThreadOwnedByAgent = match.threadOwnedByAgent;
+  if (matchThreadOwnedByAgent === true && entrypoint !== "thread_reply") {
+    return false;
+  }
+  if (matchThreadOwnedByAgent === true) {
+    return threadOwnerAgentId === listener.agentId;
+  }
+  if (matchThreadOwnedByAgent === false && threadOwnerAgentId === listener.agentId) {
+    return false;
+  }
+
+  return true;
+}
+
+type ResolvedCompiledMessageIngress = {
+  agentId: string;
+  entrypoint: MessageEntrypoint;
+  sessionMode: SessionMode;
+  trigger: NormalizedTrigger;
+  route: "binding";
+};
+
+function resolveMessageIngressFromDeclarations(input: {
+  message: InboundSlackMessage;
+  activeAgentChannels: ReadonlyMap<string, string | null>;
+  threadOwnerAgentId: string | null;
+}): ResolvedCompiledMessageIngress | null {
+  const entrypoint = deriveMessageEntrypoint(input.message);
+  if (!entrypoint) {
+    return null;
+  }
+
+  const listeners = compiledDeclarations.ingress.messageByEntrypoint[entrypoint];
+  const candidates: Array<
+    ResolvedCompiledMessageIngress & {
+      channelAffinityScore: number;
+    }
+  > = [];
+
+  for (const listener of listeners) {
+    const channelAffinity = input.activeAgentChannels.get(listener.agentId);
+    if (channelAffinity === undefined) {
+      continue;
+    }
+
+    if (
+      !messageListenerMatches({
+        listener,
+        message: input.message,
+        entrypoint,
+        threadOwnerAgentId: input.threadOwnerAgentId,
+      })
+    ) {
+      continue;
+    }
+
+    candidates.push({
+      agentId: listener.agentId,
+      entrypoint,
+      sessionMode: listener.sessionMode,
+      trigger: toNormalizedTrigger(listener.trigger),
+      route: "binding",
+      channelAffinityScore:
+        channelAffinity === input.message.channelId ? 1 : 0,
+    });
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  candidates.sort((a, b) => {
+    if (a.channelAffinityScore !== b.channelAffinityScore) {
+      return b.channelAffinityScore - a.channelAffinityScore;
+    }
+    return a.agentId.localeCompare(b.agentId);
+  });
+
+  const winner = candidates[0];
+  if (!winner) {
+    return null;
+  }
+
+  return {
+    agentId: winner.agentId,
+    entrypoint: winner.entrypoint,
+    sessionMode: winner.sessionMode,
+    trigger: winner.trigger,
+    route: winner.route,
+  };
 }
 
 type ActiveThreadSession = {
@@ -450,6 +608,7 @@ async function resolveMessageDecision(
       agentId: null,
       entrypoint: null,
       sessionMode: null,
+      trigger: null,
       sessionKeyOverride: null,
       query,
       route: "unmapped",
@@ -461,8 +620,10 @@ async function resolveMessageDecision(
       ? await findActiveThreadSession(dbClient, message.channelId, message.threadTs)
       : null;
 
-  const activeAgents = await loadActiveAgentIngressRows(dbClient);
-  const resolved = resolveMessageIngress(message, activeAgents, {
+  const activeAgents = await loadActiveAgentChannels(dbClient);
+  const resolved = resolveMessageIngressFromDeclarations({
+    message,
+    activeAgentChannels: activeAgents,
     threadOwnerAgentId: activeThreadSession?.agent_id ?? null,
   });
 
@@ -476,7 +637,7 @@ async function resolveMessageDecision(
     isDirectMessage: message.isDirectMessage,
     activeThreadSessionKey: activeThreadSession?.session_key ?? null,
     activeThreadOwnerAgentId: activeThreadSession?.agent_id ?? null,
-    activeAgentCount: activeAgents.length,
+    activeAgentCount: activeAgents.size,
     resolvedAgentId: resolved?.agentId ?? null,
     resolvedEntrypoint: resolved?.entrypoint ?? null,
     resolvedSessionMode: resolved?.sessionMode ?? null,
@@ -488,6 +649,7 @@ async function resolveMessageDecision(
       agentId: null,
       entrypoint: null,
       sessionMode: null,
+      trigger: null,
       sessionKeyOverride: null,
       query,
       route: "unmapped",
@@ -503,6 +665,7 @@ async function resolveMessageDecision(
     agentId: resolved.agentId,
     entrypoint: resolved.entrypoint,
     sessionMode: resolved.sessionMode,
+    trigger: resolved.trigger,
     sessionKeyOverride,
     query,
     route: resolved.route,
@@ -731,7 +894,7 @@ async function handleInboundSlashCommand(
     ackResponseType: decision.ackResponse.response_type,
   });
 
-  if (!decision.agentId) {
+  if (!decision.agentId || !decision.trigger) {
     console.log(
       `[gravity] slash command ignored (unmapped command=${command.command} sourceEventId=${command.sourceEventId})`,
     );
@@ -764,7 +927,7 @@ async function handleInboundSlashCommand(
   const activeSlackTransport = slackTransport;
   const activeAgentId = decision.agentId;
   const activeSessionCatalog = sessionCatalog;
-  const normalizedTrigger = normalizeSlackSlashCommandTrigger();
+  const normalizedTrigger = decision.trigger;
   const activeScheduler = proactiveTriggerScheduler;
 
   try {
@@ -772,7 +935,6 @@ async function handleInboundSlashCommand(
       const manualWakeDecision = decision.manualWake;
       const runId = createSlashRunId(command.sourceEventId);
       const sessionKey = createSlashSessionKey(activeAgentId, command.sourceEventId);
-      const normalizedTrigger = normalizeSlackSlashCommandTrigger();
       let resultSummary = "manual wake requested";
       const persistenceLogger = activeRunLogStore.createLifecycleLogger({
         query: decision.query,
@@ -967,7 +1129,12 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
     route: decision.route,
   });
 
-  if (!decision.agentId || !decision.entrypoint || !decision.sessionMode) {
+  if (
+    !decision.agentId ||
+    !decision.entrypoint ||
+    !decision.sessionMode ||
+    !decision.trigger
+  ) {
     console.log(
       `[gravity] message ignored (surface=${message.surface} channelId=${message.channelId} sourceEventId=${message.sourceEventId})`,
     );
@@ -1001,7 +1168,7 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
   const resolvedAgentId = decision.agentId;
   const resolvedEntrypoint = decision.entrypoint;
   const resolvedSessionMode = decision.sessionMode;
-  const normalizedTrigger = normalizeSlackMessageTrigger(resolvedEntrypoint);
+  const normalizedTrigger = decision.trigger;
 
   try {
     const runId = createMessageRunId(message.sourceEventId);
