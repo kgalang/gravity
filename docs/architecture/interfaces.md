@@ -15,7 +15,7 @@ Keep moving parts explicit and replaceable.
 - `Scheduler`: heartbeat and cron execution with target session behavior.
 
 ## Non-Goals for Current Bootstrap
-- No Slack channel-to-agent routing or reply behavior yet (transport-only ingest is active for CP3).
+- No Slack reply behavior yet (transport + channel-to-agent routing are active for CP3).
 - No live Claude tool loop yet.
 - No sandbox enforcement yet.
 
