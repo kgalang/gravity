@@ -7,7 +7,7 @@ These docs are the canonical source of truth for architecture, execution status,
 - [Architecture system map](architecture/system-map.md)
 - [Architecture interfaces](architecture/interfaces.md)
 - [MVP checkpoint status](checkpoints/mvp-status.md)
-- [Active plan](plans/active/2026-02-18-cp4-wiggs-e2e.md)
+- [Active plan](plans/active/2026-02-18-cp5-run-logging-store-conventions.md)
 - [Planning model](PLANS.md)
 - [Harness practices mapping](harness/practices.md)
 - [Merge gates policy](policies/merge-gates.md)
