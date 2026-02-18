@@ -14,12 +14,30 @@ CREATE TABLE IF NOT EXISTS gravity.agents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS gravity.sessions (
+  session_key TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES gravity.agents(id) ON DELETE RESTRICT,
+  mode TEXT NOT NULL CHECK (mode IN ('thread', 'main', 'isolated')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+  surface TEXT CHECK (surface IN ('slack', 'system')),
+  channel_id TEXT,
+  thread_ts TEXT,
+  owner_user_id TEXT,
+  opened_by_trigger TEXT NOT NULL CHECK (opened_by_trigger IN ('message', 'cron', 'heartbeat', 'system')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_activity_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ,
+  CHECK (closed_at IS NULL OR closed_at >= created_at)
+);
+
 CREATE TABLE IF NOT EXISTS gravity.runs (
   id TEXT PRIMARY KEY,
   agent_id TEXT NOT NULL REFERENCES gravity.agents(id) ON DELETE RESTRICT,
   session_key TEXT NOT NULL,
   thread_ts TEXT,
-  source TEXT NOT NULL DEFAULT 'slack' CHECK (source IN ('slack', 'cron', 'heartbeat', 'system')),
+  trigger_kind TEXT NOT NULL DEFAULT 'message' CHECK (trigger_kind IN ('message', 'cron', 'heartbeat', 'system')),
+  surface TEXT NOT NULL DEFAULT 'slack' CHECK (surface IN ('slack', 'system')),
+  entrypoint TEXT NOT NULL DEFAULT 'slash_command' CHECK (entrypoint IN ('slash_command', 'app_mention', 'thread_reply', 'direct_message', 'cron', 'heartbeat', 'system')),
   source_event_id TEXT,
   channel_id TEXT,
   user_id TEXT,
@@ -64,6 +82,12 @@ CREATE INDEX IF NOT EXISTS idx_runs_session_started
 
 CREATE INDEX IF NOT EXISTS idx_skill_versions_agent_created
   ON gravity.skill_versions(agent_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_agent_last_activity
+  ON gravity.sessions(agent_id, last_activity_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_status_last_activity
+  ON gravity.sessions(status, last_activity_at DESC);
 
 CREATE OR REPLACE FUNCTION gravity.set_updated_at()
 RETURNS TRIGGER

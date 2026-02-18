@@ -12,14 +12,18 @@ describe("createRunContext", () => {
       runId: "run-123",
       agentId: "data-analyst",
       sessionKey: "data-analyst:1700000000.1234",
-      source: "slack",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
     });
 
     expect(context).toEqual({
       runId: "run-123",
       agentId: "data-analyst",
       sessionKey: "data-analyst:1700000000.1234",
-      source: "slack",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
     });
   });
 
@@ -27,7 +31,9 @@ describe("createRunContext", () => {
     const context = createRunContext({
       agentId: "compliance-helper",
       sessionKey: "compliance-helper:main",
-      source: "system",
+      triggerKind: "system",
+      surface: "system",
+      entrypoint: "system",
     });
 
     expect(context.runId).toMatch(
@@ -43,7 +49,9 @@ describe("withRunLifecycle", () => {
       runId: "run-composed-loggers",
       agentId: "system-bootstrap",
       sessionKey: "system-bootstrap:main",
-      source: "system",
+      triggerKind: "system",
+      surface: "system",
+      entrypoint: "system",
     });
     const logger = composeRunLifecycleLoggers([
       async (event) => {
@@ -70,7 +78,9 @@ describe("withRunLifecycle", () => {
       runId: "run-success",
       agentId: "data-analyst",
       sessionKey: "data-analyst:main",
-      source: "slack",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
     });
 
     const result = await withRunLifecycle(context, (event) => {
@@ -84,6 +94,9 @@ describe("withRunLifecycle", () => {
     expect(events[1]?.runId).toBe("run-success");
     expect(events[1]?.agentId).toBe("data-analyst");
     expect(events[1]?.sessionKey).toBe("data-analyst:main");
+    expect(events[1]?.triggerKind).toBe("message");
+    expect(events[1]?.surface).toBe("slack");
+    expect(events[1]?.entrypoint).toBe("slash_command");
     expect(events[1]?.durationMs).toBeTypeOf("number");
   });
 
@@ -93,7 +106,9 @@ describe("withRunLifecycle", () => {
       runId: "run-failure",
       agentId: "compliance-helper",
       sessionKey: "compliance-helper:main",
-      source: "cron",
+      triggerKind: "cron",
+      surface: "system",
+      entrypoint: "cron",
     });
 
     await expect(
@@ -121,7 +136,9 @@ describe("withRunLifecycle", () => {
       runId: "run-non-error",
       agentId: "system-bootstrap",
       sessionKey: "system-bootstrap:main",
-      source: "system",
+      triggerKind: "system",
+      surface: "system",
+      entrypoint: "system",
     });
 
     await expect(
@@ -145,7 +162,9 @@ describe("withRunLifecycle", () => {
       runId: "run-async-logger-failure",
       agentId: "system-bootstrap",
       sessionKey: "system-bootstrap:main",
-      source: "system",
+      triggerKind: "system",
+      surface: "system",
+      entrypoint: "system",
     });
     let runCalled = false;
 

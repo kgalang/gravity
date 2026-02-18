@@ -1,9 +1,11 @@
 import type { Kysely } from "kysely";
 import { type GravityDatabase, gravitySchema } from "./db.js";
 import type {
+  RunEntrypoint,
   RunLifecycleEvent,
   RunLifecycleLogger,
-  RunSource,
+  RunSurface,
+  RunTriggerKind,
 } from "./run-lifecycle.js";
 
 export type RunLogLifecycleMetadata = {
@@ -21,7 +23,9 @@ export type RunStartedRecord = {
   runId: string;
   agentId: string;
   sessionKey: string;
-  source: RunSource;
+  triggerKind: RunTriggerKind;
+  surface: RunSurface;
+  entrypoint: RunEntrypoint;
   sourceEventId: string | null;
   channelId: string | null;
   threadTs: string | null;
@@ -121,7 +125,9 @@ export function createRunLogStore(repository: RunLogRepository): RunLogStore {
               runId: event.runId,
               agentId: event.agentId,
               sessionKey: event.sessionKey,
-              source: event.source,
+              triggerKind: event.triggerKind,
+              surface: event.surface,
+              entrypoint: event.entrypoint,
               sourceEventId,
               channelId,
               threadTs,
@@ -166,7 +172,9 @@ export function createKyselyRunLogRepository(
           agent_id: record.agentId,
           session_key: record.sessionKey,
           thread_ts: record.threadTs,
-          source: record.source,
+          trigger_kind: record.triggerKind,
+          surface: record.surface,
+          entrypoint: record.entrypoint,
           source_event_id: record.sourceEventId,
           channel_id: record.channelId,
           user_id: record.userId,

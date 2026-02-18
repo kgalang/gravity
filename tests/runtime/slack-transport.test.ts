@@ -52,6 +52,7 @@ class FakeSocketModeClient implements SocketModeClientLike {
 class FakeWebClient implements WebClientLike {
   readonly auth: WebClientLike["auth"];
   readonly chat: WebClientLike["chat"];
+  readonly conversations: WebClientLike["conversations"];
 
   constructor(botUserId: string) {
     this.auth = {
@@ -59,6 +60,9 @@ class FakeWebClient implements WebClientLike {
     };
     this.chat = {
       postMessage: vi.fn(async () => ({ ts: "reply-ts" })),
+    };
+    this.conversations = {
+      open: vi.fn(async ({ users }) => ({ channel: { id: `D-${users}` } })),
     };
   }
 }
@@ -451,5 +455,29 @@ describe("SlackTransport", () => {
       response_type: "in_channel",
       text: "routed /wiggs",
     });
+  });
+
+  it("opens and caches DM channels when posting direct messages", async () => {
+    const socket = new FakeSocketModeClient();
+    const web = new FakeWebClient("UBOT");
+    const transport = new SlackTransport({
+      appToken: "xapp-test",
+      botToken: "xoxb-test",
+      socketClient: socket,
+      webClient: web,
+      log: () => {
+        // no-op for tests
+      },
+    });
+
+    await transport.start();
+
+    const first = await transport.postDirectMessage("U123", "hello");
+    const second = await transport.postDirectMessage("U123", "hello again");
+
+    expect(first).toEqual({ channelId: "D-U123", ts: "reply-ts" });
+    expect(second).toEqual({ channelId: "D-U123", ts: "reply-ts" });
+    expect(web.conversations.open).toHaveBeenCalledTimes(1);
+    expect(web.chat.postMessage).toHaveBeenCalledTimes(2);
   });
 });

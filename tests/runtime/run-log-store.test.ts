@@ -52,7 +52,9 @@ describe("createRunLogStore", () => {
       runId: "slack:trigger-1",
       agentId: "data-analyst",
       sessionKey: "data-analyst:trigger-1",
-      source: "slack",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
     });
 
     await withRunLifecycle(runContext, lifecycleLogger, async () => {
@@ -64,7 +66,9 @@ describe("createRunLogStore", () => {
       runId: "slack:trigger-1",
       agentId: "data-analyst",
       sessionKey: "data-analyst:trigger-1",
-      source: "slack",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
       sourceEventId: "trigger-1",
       channelId: "C123",
       threadTs: null,
@@ -100,7 +104,9 @@ describe("createRunLogStore", () => {
       runId: "slack:trigger-2",
       agentId: "compliance-helper",
       sessionKey: "compliance-helper:trigger-2",
-      source: "slack",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
     });
 
     await expect(
