@@ -4,8 +4,9 @@ This repository follows a harness-oriented workflow: docs first, clear interface
 
 ## Fast Map
 - Canonical docs index: [docs/README.md](docs/README.md)
-- Current execution plan: [docs/plans/active/2026-02-18-cp5-run-logging-store-conventions.md](docs/plans/active/2026-02-18-cp5-run-logging-store-conventions.md)
+- Current execution plan: [docs/plans/active/2026-02-18-cp10-proactive-validation-hardening.md](docs/plans/active/2026-02-18-cp10-proactive-validation-hardening.md)
 - Checkpoint board: [docs/checkpoints/mvp-status.md](docs/checkpoints/mvp-status.md)
+- CP5 verification matrix: [docs/checkpoints/cp5-verification.md](docs/checkpoints/cp5-verification.md)
 - System map: [docs/architecture/system-map.md](docs/architecture/system-map.md)
 - Interface boundaries: [docs/architecture/interfaces.md](docs/architecture/interfaces.md)
 - Harness practices adopted here: [docs/harness/practices.md](docs/harness/practices.md)

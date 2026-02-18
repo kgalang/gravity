@@ -137,4 +137,68 @@ describe("createRunLogStore", () => {
       }),
     ).toThrow("Run log metadata query must be non-empty");
   });
+
+  it("persists trigger dimensions across non-slash and proactive runs", async () => {
+    const repository = new FakeRunLogRepository();
+    const store = createRunLogStore(repository);
+
+    const mentionLogger = store.createLifecycleLogger({
+      query: "mentioned question",
+      sourceEventId: "mention-event-1",
+    });
+    const mentionContext = createRunContext({
+      runId: "slack:mention-event-1",
+      agentId: "data-analyst",
+      sessionKey: "data-analyst:mention-thread",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "app_mention",
+    });
+    await withRunLifecycle(mentionContext, mentionLogger, async () => undefined);
+
+    const heartbeatLogger = store.createLifecycleLogger({
+      query: "proactive heartbeat",
+      sourceEventId: "heartbeat-event-1",
+    });
+    const heartbeatContext = createRunContext({
+      runId: "system:heartbeat-event-1",
+      agentId: "data-analyst",
+      sessionKey: "data-analyst:proactive:daily:thread",
+      triggerKind: "heartbeat",
+      surface: "system",
+      entrypoint: "heartbeat",
+    });
+    await expect(
+      withRunLifecycle(heartbeatContext, heartbeatLogger, async () => {
+        throw new Error("heartbeat failed");
+      }),
+    ).rejects.toThrow("heartbeat failed");
+
+    expect(repository.started).toHaveLength(2);
+    expect(repository.started[0]).toMatchObject({
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "app_mention",
+      sourceEventId: "mention-event-1",
+    });
+    expect(repository.started[1]).toMatchObject({
+      triggerKind: "heartbeat",
+      surface: "system",
+      entrypoint: "heartbeat",
+      sourceEventId: "heartbeat-event-1",
+    });
+
+    expect(repository.completed).toHaveLength(1);
+    expect(repository.completed[0]).toMatchObject({
+      runId: "slack:mention-event-1",
+    });
+
+    expect(repository.failed).toHaveLength(1);
+    expect(repository.failed[0]).toMatchObject({
+      runId: "system:heartbeat-event-1",
+      record: {
+        errorMessage: "heartbeat failed",
+      },
+    });
+  });
 });

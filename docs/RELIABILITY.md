@@ -5,6 +5,7 @@
 - Best-effort startup checks.
 - Run lifecycle wrapper emits typed events with stable IDs to the runtime log sink.
 - Source-event idempotency guard prevents duplicate slash/non-slash run execution in-process and checks persisted `gravity.runs.source_event_id`.
+- CP5 verification harness (`npm run verify:cp5`) validates persisted run lifecycle fields across slash/non-slash/proactive paths and failure handling.
 - No durable job replay yet.
 
 ## Planned Reliability Contracts
