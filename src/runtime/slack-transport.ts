@@ -148,6 +148,9 @@ export type WebClientLike = {
       thread_ts?: string;
     }) => Promise<{ ts?: string }>;
   };
+  conversations: {
+    open: (args: { users: string }) => Promise<{ channel?: { id?: string } }>;
+  };
 };
 
 export type SlackTransportConfig = {
@@ -283,6 +286,19 @@ function createDefaultWebClient(botToken: string): WebClientLike {
           thread_ts: args.thread_ts,
         });
         return { ts: result.ts };
+      },
+    },
+    conversations: {
+      async open(args) {
+        const result = await client.conversations.open({
+          users: args.users,
+        });
+
+        return {
+          channel: {
+            id: typeof result.channel?.id === "string" ? result.channel.id : undefined,
+          },
+        };
       },
     },
   };
@@ -421,6 +437,7 @@ export class SlackTransport {
   private readonly enableMessageEvents: boolean;
   private readonly log: (line: string) => void;
   private readonly queues = new Map<string, ChannelQueue>();
+  private readonly directMessageChannelByUserId = new Map<string, string>();
 
   private botUserId: string | null = null;
   private started = false;
@@ -466,6 +483,7 @@ export class SlackTransport {
     }
 
     this.started = false;
+    this.directMessageChannelByUserId.clear();
     this.log("[gravity] slack transport stopped");
   }
 
@@ -500,8 +518,40 @@ export class SlackTransport {
     return result.ts;
   }
 
+  async postDirectMessage(
+    userId: string,
+    text: string,
+  ): Promise<{ channelId: string; ts: string }> {
+    const channelId = await this.resolveDirectMessageChannel(userId);
+    const ts = await this.postChannelMessage(channelId, text);
+    return { channelId, ts };
+  }
+
   getBotUserId(): string | null {
     return this.botUserId;
+  }
+
+  private async resolveDirectMessageChannel(userId: string): Promise<string> {
+    const normalizedUserId = userId.trim();
+    if (normalizedUserId.length === 0) {
+      throw new Error("Slack userId must be non-empty");
+    }
+
+    const cachedChannelId = this.directMessageChannelByUserId.get(normalizedUserId);
+    if (cachedChannelId) {
+      return cachedChannelId;
+    }
+
+    const result = await this.webClient.conversations.open({
+      users: normalizedUserId,
+    });
+    const channelId = result.channel?.id?.trim();
+    if (!channelId) {
+      throw new Error(`Slack conversations.open returned no channel id for user ${normalizedUserId}`);
+    }
+
+    this.directMessageChannelByUserId.set(normalizedUserId, channelId);
+    return channelId;
   }
 
   private registerEventHandlers(): void {

@@ -1,13 +1,24 @@
 import { randomUUID } from "node:crypto";
 
-export type RunSource = "slack" | "cron" | "heartbeat" | "system";
+export type RunTriggerKind = "message" | "cron" | "heartbeat" | "system";
+export type RunSurface = "slack" | "system";
+export type RunEntrypoint =
+  | "slash_command"
+  | "app_mention"
+  | "thread_reply"
+  | "direct_message"
+  | "cron"
+  | "heartbeat"
+  | "system";
 export type RunLifecycleStage = "started" | "completed" | "failed";
 
 export type RunLifecycleContext = {
   runId: string;
   agentId: string;
   sessionKey: string;
-  source: RunSource;
+  triggerKind: RunTriggerKind;
+  surface: RunSurface;
+  entrypoint: RunEntrypoint;
 };
 
 export type RunLifecycleEvent = {
@@ -17,7 +28,9 @@ export type RunLifecycleEvent = {
   runId: string;
   agentId: string;
   sessionKey: string;
-  source: RunSource;
+  triggerKind: RunTriggerKind;
+  surface: RunSurface;
+  entrypoint: RunEntrypoint;
   durationMs?: number;
   errorMessage?: string;
 };
@@ -29,7 +42,9 @@ export type RunLifecycleLogger = (
 export type CreateRunContextInput = {
   agentId: string;
   sessionKey: string;
-  source: RunSource;
+  triggerKind: RunTriggerKind;
+  surface: RunSurface;
+  entrypoint: RunEntrypoint;
   runId?: string;
 };
 
@@ -40,7 +55,9 @@ export function createRunContext(
     runId: input.runId ?? randomUUID(),
     agentId: input.agentId,
     sessionKey: input.sessionKey,
-    source: input.source,
+    triggerKind: input.triggerKind,
+    surface: input.surface,
+    entrypoint: input.entrypoint,
   };
 }
 
@@ -89,7 +106,9 @@ export async function withRunLifecycle<T>(
     runId: context.runId,
     agentId: context.agentId,
     sessionKey: context.sessionKey,
-    source: context.source,
+    triggerKind: context.triggerKind,
+    surface: context.surface,
+    entrypoint: context.entrypoint,
   });
 
   try {
@@ -103,7 +122,9 @@ export async function withRunLifecycle<T>(
       runId: context.runId,
       agentId: context.agentId,
       sessionKey: context.sessionKey,
-      source: context.source,
+      triggerKind: context.triggerKind,
+      surface: context.surface,
+      entrypoint: context.entrypoint,
       durationMs: completedAt - startedAt,
     });
 
@@ -118,7 +139,9 @@ export async function withRunLifecycle<T>(
       runId: context.runId,
       agentId: context.agentId,
       sessionKey: context.sessionKey,
-      source: context.source,
+      triggerKind: context.triggerKind,
+      surface: context.surface,
+      entrypoint: context.entrypoint,
       durationMs: failedAt - startedAt,
       errorMessage: normalizeErrorMessage(error),
     });

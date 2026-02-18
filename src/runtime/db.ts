@@ -16,8 +16,20 @@ function configurePgTypeParsers(): void {
 }
 
 type AgentStatus = "active" | "paused" | "archived";
+type SessionMode = "thread" | "main" | "isolated";
+type SessionStatus = "active" | "closed";
+type SessionSurface = "slack" | "system";
+type RunTriggerKind = "message" | "cron" | "heartbeat" | "system";
+type RunSurface = "slack" | "system";
+type RunEntrypoint =
+  | "slash_command"
+  | "app_mention"
+  | "thread_reply"
+  | "direct_message"
+  | "cron"
+  | "heartbeat"
+  | "system";
 type RunStatus = "running" | "completed" | "failed" | "cancelled";
-type RunSource = "slack" | "cron" | "heartbeat" | "system";
 
 type AgentsTable = {
   id: string;
@@ -33,12 +45,29 @@ type AgentsTable = {
   updated_at: Date;
 };
 
+type SessionsTable = {
+  session_key: string;
+  agent_id: string;
+  mode: SessionMode;
+  status: SessionStatus;
+  surface: SessionSurface | null;
+  channel_id: string | null;
+  thread_ts: string | null;
+  owner_user_id: string | null;
+  opened_by_trigger: RunTriggerKind;
+  created_at: Date;
+  last_activity_at: Date;
+  closed_at: Date | null;
+};
+
 type RunsTable = {
   id: string;
   agent_id: string;
   session_key: string;
   thread_ts: string | null;
-  source: RunSource;
+  trigger_kind: RunTriggerKind;
+  surface: RunSurface;
+  entrypoint: RunEntrypoint;
   source_event_id: string | null;
   channel_id: string | null;
   user_id: string | null;
@@ -67,6 +96,7 @@ type SkillVersionsTable = {
 
 export type GravityDatabase = {
   agents: AgentsTable;
+  sessions: SessionsTable;
   runs: RunsTable;
   skill_versions: SkillVersionsTable;
 };
