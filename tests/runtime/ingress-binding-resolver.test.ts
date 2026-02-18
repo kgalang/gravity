@@ -92,6 +92,43 @@ describe("resolveMessageIngress", () => {
     });
   });
 
+  it("treats DM thread replies as thread_reply entrypoint", () => {
+    const message = createBaseMessage({
+      surface: "message",
+      isDirectMessage: true,
+      channelId: "D123",
+      threadTs: "1700000001.1",
+      messageTs: "1700000001.2",
+    });
+    const agents: ActiveAgentIngressRow[] = [
+      createAgent({
+        id: "data-analyst",
+        channel_id: null,
+        config: {
+          ingressBindings: [
+            {
+              kind: "message",
+              surface: "slack",
+              entrypoint: "thread_reply",
+              sessionMode: "thread",
+              enabled: true,
+              match: { threadOwnedByAgent: true },
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(
+      resolveMessageIngress(message, agents, { threadOwnerAgentId: "data-analyst" }),
+    ).toEqual({
+      agentId: "data-analyst",
+      entrypoint: "thread_reply",
+      sessionMode: "thread",
+      route: "binding",
+    });
+  });
+
   it("returns null for thread replies when no binding exists", () => {
     const message = createBaseMessage({
       surface: "message",

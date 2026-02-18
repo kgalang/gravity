@@ -81,12 +81,12 @@ function deriveMessageEntrypoint(
     return "app_mention";
   }
 
-  if (message.isDirectMessage) {
-    return "direct_message";
-  }
-
   if (message.threadTs !== message.messageTs) {
     return "thread_reply";
+  }
+
+  if (message.isDirectMessage) {
+    return "direct_message";
   }
 
   return null;
