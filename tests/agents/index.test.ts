@@ -37,13 +37,63 @@ describe("agentRegistry", () => {
       listenerId: "slack-wiggs-slash",
       command: "/wiggs",
       sessionMode: "thread",
+      entrypoint: "slash_command",
+      match: {
+        command: "/wiggs",
+      },
+      trigger: {
+        triggerKind: "message",
+        surface: "slack",
+        entrypoint: "slash_command",
+        runIdPattern: "slack:{sourceEventId}",
+      },
     });
     expect(agentRegistry.slashCommandListeners.get("/compliance")).toEqual({
       agentId: "compliance-helper",
       listenerId: "slack-compliance-slash",
       command: "/compliance",
       sessionMode: "thread",
+      entrypoint: "slash_command",
+      match: {
+        command: "/compliance",
+      },
+      trigger: {
+        triggerKind: "message",
+        surface: "slack",
+        entrypoint: "slash_command",
+        runIdPattern: "slack:{sourceEventId}",
+      },
     });
+
+    expect(
+      agentRegistry.compiledDeclarations.ingress.slashCommands["/wiggs"],
+    ).toMatchObject({
+      agentId: "data-analyst",
+      listenerId: "slack-wiggs-slash",
+      command: "/wiggs",
+      trigger: {
+        triggerKind: "message",
+        surface: "slack",
+        entrypoint: "slash_command",
+        runIdPattern: "slack:{sourceEventId}",
+      },
+    });
+    expect(agentRegistry.compiledDeclarations.ingress.listeners.length).toBe(8);
+    expect(
+      agentRegistry.compiledDeclarations.ingress.messageByEntrypoint.app_mention
+        .length,
+    ).toBe(2);
+    expect(
+      agentRegistry.compiledDeclarations.ingress.messageByEntrypoint.thread_reply
+        .length,
+    ).toBe(2);
+    expect(
+      agentRegistry.compiledDeclarations.ingress.messageByEntrypoint.direct_message
+        .length,
+    ).toBe(2);
+    expect(agentRegistry.compiledDeclarations.proactive.triggers).toEqual([]);
+    expect(agentRegistry.compiledDeclarations.sessions.dimensions.length).toBe(8);
+    expect(agentRegistry.compiledDeclarations.triggerDimensions.length).toBe(8);
   });
 });
 
@@ -130,5 +180,127 @@ describe("createAgentRegistry", () => {
         agents: [first, second],
       }),
     ).toThrow(/slash command collision/i);
+  });
+
+  it("compiles proactive/session dimensions and trigger identities", () => {
+    const compiled = createAgentRegistry({
+      config: testConfig,
+      agents: [
+        defineAgent({
+          id: "alpha",
+          name: "Alpha",
+          quietHours: {
+            timezone: "America/Los_Angeles",
+            startHour: 22,
+            endHour: 7,
+          },
+          listen: [
+            {
+              id: "alpha-slash",
+              kind: "message",
+              surface: "slack",
+              entrypoint: "slash_command",
+              match: {
+                command: "/alpha",
+              },
+            },
+          ],
+          proactive: {
+            deliveryDefaults: {
+              surface: "slack",
+              mode: "dm",
+              userId: "U999",
+            },
+            triggers: [
+              {
+                id: "nightly",
+                kind: "cron",
+                schedule: "0 9 * * *",
+                prompt: "run nightly",
+                sessionMode: "thread",
+              },
+            ],
+          },
+          tools: ["query-gravity"],
+        }),
+      ],
+    }).compiledDeclarations;
+
+    expect(compiled.proactive.triggers).toEqual([
+      {
+        agentId: "alpha",
+        triggerId: "nightly",
+        kind: "cron",
+        schedule: "0 9 * * *",
+        prompt: "run nightly",
+        sessionMode: "main",
+        delivery: {
+          surface: "slack",
+          mode: "dm",
+          userId: "U999",
+        },
+        quietHours: {
+          enabled: true,
+          timezone: "America/Los_Angeles",
+          startHour: 22,
+          endHour: 7,
+        },
+        trigger: {
+          triggerKind: "cron",
+          surface: "system",
+          entrypoint: "cron",
+          runIdPattern: "{sourceEventId}",
+        },
+      },
+    ]);
+    expect(compiled.sessions.dimensions).toContainEqual({
+      agentId: "alpha",
+      sourceKind: "proactive",
+      sourceId: "nightly",
+      sessionMode: "main",
+      sessionKeyPatterns: ["{agentId}:main"],
+      trigger: {
+        triggerKind: "cron",
+        surface: "system",
+        entrypoint: "cron",
+        runIdPattern: "{sourceEventId}",
+      },
+    });
+  });
+
+  it("throws when a proactive trigger cannot resolve a delivery target", () => {
+    expect(() =>
+      createAgentRegistry({
+        config: testConfig,
+        agents: [
+          defineAgent({
+            id: "alpha",
+            name: "Alpha",
+            listen: [
+              {
+                id: "alpha-slash",
+                kind: "message",
+                surface: "slack",
+                entrypoint: "slash_command",
+                match: {
+                  command: "/alpha",
+                },
+              },
+            ],
+            proactive: {
+              triggers: [
+                {
+                  id: "missing-delivery",
+                  kind: "heartbeat",
+                  intervalSeconds: 300,
+                  prompt: "ping",
+                },
+              ],
+            },
+            tools: ["query-gravity"],
+          }),
+        ],
+      }),
+    ).toThrow(/missing delivery and proactive deliveryDefaults/i);
   });
 });

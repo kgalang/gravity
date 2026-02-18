@@ -31,7 +31,7 @@ Gate:
 - `npm run check`
 
 ### Step 2 - Compile runtime declarations from code
-Status: next
+Status: complete
 
 Deliverables:
 - Emit typed declarations for ingress listeners, proactive triggers, and session dimensions from code-defined agents.
@@ -42,7 +42,7 @@ Gate:
 - `npm run check`
 
 ### Step 3 - Cut over slash + message ingress routing
-Status: pending
+Status: next
 
 Deliverables:
 - Rewire slash routing to compiled listener declarations.
@@ -110,6 +110,13 @@ Gate:
 - Added unit coverage in `tests/agents/contracts.test.ts` and `tests/agents/index.test.ts`.
 - Verification gates passed after Step 1 changes: `npm run check`, `npm run build`.
 - Runtime routing/resolution remains on legacy DB JSONB seams until Step 2-6 cutovers are complete.
+- Added compiled declaration outputs in `agents/index.ts`:
+  - ingress listeners (slash + message),
+  - proactive triggers (resolved delivery/session dimensions),
+  - session dimensions (`sessionKey` pattern contracts),
+  - trigger dimensions (`triggerKind`, `surface`, `entrypoint`, `runId` pattern).
+- Added Step 2 unit coverage in `tests/agents/index.test.ts` for compiled declarations, proactive/session dimension compilation, and fail-closed proactive delivery checks.
+- Runtime routing/resolution still runs through legacy DB JSONB resolver seams until Step 3-6 cutovers are complete.
 
 ## Parity Matrix (Required)
 - Slash command routing + ack behavior parity.
