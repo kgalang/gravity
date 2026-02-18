@@ -185,7 +185,7 @@ describe("normalizeSlashCommandBody", () => {
     expect(normalized?.triggerId).toBeNull();
   });
 
-  it("uses a generated fallback source event id when trigger_id and envelope_id are missing", () => {
+  it("uses a deterministic fallback source event id when trigger_id and envelope_id are missing", () => {
     const one = normalizeSlashCommandBody({
       command: "/wiggs",
       text: "top customers",
@@ -198,10 +198,17 @@ describe("normalizeSlashCommandBody", () => {
       channel_id: "C123",
       user_id: "U123",
     });
+    const three = normalizeSlashCommandBody({
+      command: "/wiggs",
+      text: "top suppliers",
+      channel_id: "C123",
+      user_id: "U123",
+    });
 
     expect(one?.sourceEventId).toMatch(/^slash:[a-f0-9]{32}$/);
     expect(two?.sourceEventId).toMatch(/^slash:[a-f0-9]{32}$/);
-    expect(one?.sourceEventId).not.toBe(two?.sourceEventId);
+    expect(one?.sourceEventId).toBe(two?.sourceEventId);
+    expect(one?.sourceEventId).not.toBe(three?.sourceEventId);
   });
 });
 
@@ -401,6 +408,48 @@ describe("SlackTransport", () => {
       channelId: "C123",
       userId: "U123",
       triggerId: "trigger-1",
+    });
+  });
+
+  it("acks slash commands with an in_channel response when configured", async () => {
+    const socket = new FakeSocketModeClient();
+    const web = new FakeWebClient("UBOT");
+    const ack = vi.fn(async () => undefined);
+
+    const transport = new SlackTransport({
+      appToken: "xapp-test",
+      botToken: "xoxb-test",
+      socketClient: socket,
+      webClient: web,
+      enableMessageEvents: false,
+      onSlashCommandAcknowledge: () => ({
+        response_type: "in_channel",
+        text: "routed /wiggs",
+      }),
+      log: () => {
+        // no-op for tests
+      },
+    });
+
+    await transport.start();
+
+    await socket.emit("slash_commands", {
+      body: {
+        command: "/wiggs",
+        text: "",
+        channel_id: "C123",
+        user_id: "U123",
+        trigger_id: "trigger-1",
+      },
+      ack,
+    });
+
+    await sleep(10);
+
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(ack).toHaveBeenCalledWith({
+      response_type: "in_channel",
+      text: "routed /wiggs",
     });
   });
 });
