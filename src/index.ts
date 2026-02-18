@@ -769,24 +769,62 @@ async function handleInboundSlashCommand(
 
   try {
     if (decision.manualWake) {
-      if (!activeScheduler) {
-        console.log(
-          `[gravity] manual wake ignored (scheduler unavailable sourceEventId=${command.sourceEventId} agentId=${activeAgentId})`,
-        );
-        return;
-      }
-
-      const firedCount = await activeScheduler.wake({
-        agentId: activeAgentId,
-        kind: "heartbeat",
-        triggerId: decision.manualWake.triggerId,
-        bypassQuietHours: true,
+      const manualWakeDecision = decision.manualWake;
+      const runId = createSlashRunId(command.sourceEventId);
+      const sessionKey = createSlashSessionKey(activeAgentId, command.sourceEventId);
+      const normalizedTrigger = normalizeSlackSlashCommandTrigger();
+      let resultSummary = "manual wake requested";
+      const persistenceLogger = activeRunLogStore.createLifecycleLogger({
+        query: decision.query,
+        sourceEventId: command.sourceEventId,
+        channelId: command.channelId,
+        userId: command.userId,
+        policyDecisions: {
+          trigger: "slash_command",
+          response_type: decision.ackResponse.response_type,
+          manual_wake: true,
+          manual_wake_trigger_id: manualWakeDecision.triggerId ?? null,
+          manual_wake_scheduler_available: Boolean(activeScheduler),
+        },
+        getResultSummary: () => resultSummary,
       });
+      const runContext = createRunContext({
+        runId,
+        agentId: activeAgentId,
+        sessionKey,
+        triggerKind: normalizedTrigger.triggerKind,
+        surface: normalizedTrigger.surface,
+        entrypoint: normalizedTrigger.entrypoint,
+      });
+      const firedCount = await withRunLifecycle(
+        runContext,
+        composeRunLifecycleLoggers([lifecycleLogger, persistenceLogger]),
+        async () => {
+          if (!activeScheduler) {
+            console.log(
+              `[gravity] manual wake ignored (scheduler unavailable sourceEventId=${command.sourceEventId} agentId=${activeAgentId})`,
+            );
+            resultSummary = "manual wake ignored (scheduler unavailable)";
+            return 0;
+          }
+
+          const fired = await activeScheduler.wake({
+            agentId: activeAgentId,
+            kind: "heartbeat",
+            triggerId: manualWakeDecision.triggerId,
+            bypassQuietHours: true,
+          });
+          resultSummary = `manual wake fired ${fired} trigger(s)`;
+          return fired;
+        },
+      );
       console.log(
         `[gravity] manual wake handled ${JSON.stringify({
           sourceEventId: command.sourceEventId,
           agentId: activeAgentId,
-          triggerId: decision.manualWake.triggerId ?? null,
+          runId,
+          sessionKey,
+          triggerId: manualWakeDecision.triggerId ?? null,
           firedCount,
         })}`,
       );
