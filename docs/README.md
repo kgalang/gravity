@@ -4,11 +4,12 @@ These docs are the canonical source of truth for architecture, execution status,
 
 ## Core Documents
 
+- [Canonical rearchitecture decision](architecture/rearchitecture-decision.md)
 - [Architecture system map](architecture/system-map.md)
 - [Architecture interfaces](architecture/interfaces.md)
 - [MVP checkpoint status](checkpoints/mvp-status.md)
 - [CP10 verification matrix](checkpoints/cp10-verification.md)
-- [Active plan](plans/active/2026-02-18-cp6-sessions-memory-scaffolding.md)
+- [Active plan](plans/active/2026-02-18-cp5-1-rearchitecture-parity.md)
 - [Planning model](PLANS.md)
 - [Harness practices mapping](harness/practices.md)
 - [Merge gates policy](policies/merge-gates.md)

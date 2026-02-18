@@ -28,6 +28,13 @@ SELECT id, name, status, channel_id FROM gravity.agents;
 3. Run full repository gates: `npm run check`
 4. Optional: inspect matrix and live SQL samples in `docs/checkpoints/cp5-verification.md`
 
+## CP5.1 Rearchitecture Parity Commands
+1. Ensure Postgres is running and schema is current: `npm run db:up && npm run db:apply`
+2. Validate CP5 parity surface: `npm run verify:cp5`
+3. Validate proactive parity surface: `npm run verify:cp10`
+4. Run full repository gates: `npm run check`
+5. Confirm active plan and decision contract: `docs/plans/active/2026-02-18-cp5-1-rearchitecture-parity.md`, `docs/architecture/rearchitecture-decision.md`
+
 ## CP10 Verification Commands
 1. Ensure Postgres is running and schema is current: `npm run db:up && npm run db:apply`
 2. Run CP10 verification harness: `npm run verify:cp10`

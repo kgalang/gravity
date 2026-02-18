@@ -5,12 +5,13 @@ Keep moving parts explicit and replaceable.
 ## Runtime Interfaces (current)
 - `DbClient` (`src/runtime/db.ts`): owns typed Postgres connectivity via Kysely and provides the `gravity` schema handle.
 - `SlackTransport` (`src/runtime/slack-transport.ts`): owns Slack Socket Mode connection, inbound event normalization, and channel-scoped message queueing.
-- `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): current Slack slash-command resolver seam; expected to converge into `IngressBindingResolver` as config-driven ingress matures.
+- `CompiledAgentDeclarations` (CP5.1 target): code-defined runtime declarations compiled from `defineConfig` + `defineAgent` contracts and used as routing/scheduling source of truth.
+- `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): legacy slash resolver seam targeted for removal in CP5.1.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
-- `TriggerNormalizer` (`src/runtime/trigger-normalizer.ts`): normalizes source events into trigger dimensions (`triggerKind`, `surface`, `entrypoint`).
-- `AgentConfig` (`src/runtime/agent-config.ts`): validates and normalizes agent `config` payloads (`ingressBindings`, `deliveryDefaults`, `proactiveTriggers`, `policy.quietHours`) into typed runtime contracts with strict fail-closed behavior on invalid config.
-- `AgentSpecRepository`: loads `gravity.agents` + MVP `config` into a typed `AgentSpec`.
-- `IngressBindingResolver`: enforces `ingressBindings` for Slack entrypoints (slash command, app mention, thread reply, direct message).
+- `TriggerNormalizer` (`src/runtime/trigger-normalizer.ts`): legacy trigger-normalization seam targeted for removal in CP5.1 once typed trigger dimensions are emitted directly at ingress/proactive boundaries.
+- `AgentConfig` (`src/runtime/agent-config.ts`): legacy JSONB config normalization seam targeted for removal in CP5.1.
+- `AgentSpecRepository`: transitional repository seam while behavior source moves off `gravity.agents.config`.
+- `IngressBindingResolver`: legacy ingress-binding resolver seam targeted for removal in CP5.1.
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
 - `SessionResolver`: resolves `sessionKey` and session mode (`thread`, `main`, `isolated`) per trigger.
 - `SessionCatalog`: stores and resolves session metadata in `gravity.sessions` (ownership, mode, status) while keeping full transcript/context in `workspace/` files.
@@ -24,7 +25,7 @@ Keep moving parts explicit and replaceable.
 - `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
 - `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
 - `ToolDispatcher`: single dispatch seam for all tool execution (host now, sandbox later).
-- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): resolves `proactiveTriggers` + `deliveryDefaults` + optional quiet-hours policy into validated cron/heartbeat trigger specs.
+- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): legacy proactive resolver seam targeted for removal in CP5.1.
 - `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
 
 ## Non-Goals for Current Bootstrap
@@ -34,6 +35,7 @@ Keep moving parts explicit and replaceable.
 - No sandbox enforcement yet.
 
 ## Ownership and Rollback Notes
+- Legacy seam notes (`SlashCommandRouter`, `TriggerNormalizer`, `AgentConfig`, `IngressBindingResolver`, `ProactiveTriggerResolver`) apply only until CP5.1 rearchitecture parity is complete; after removal, rollback is by revision revert.
 - `DbClient` owner: platform runtime layer.
 - `DbClient` rollback path: swap `src/runtime/db.ts` back to direct `pg` access while preserving SQL contracts and migration files.
 - `SlackTransport` owner: platform runtime layer.

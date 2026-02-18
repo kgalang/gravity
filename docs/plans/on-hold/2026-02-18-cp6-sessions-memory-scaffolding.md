@@ -1,8 +1,16 @@
 # CP6 Plan (Sessions + Memory Scaffolding)
 
-Status: active
+Status: on_hold
 Owner: kevin + codex
 Last Updated: 2026-02-18
+
+## Hold Reason
+CP6 is paused while CP5.1 rearchitecture parity is completed.
+
+Resume gate:
+- `docs/plans/active/2026-02-18-cp5-1-rearchitecture-parity.md` exit criteria are met.
+- Legacy JSONB-driven routing/resolver modules are removed.
+- CP5 + CP10 verification remains green after the rearchitecture cutover.
 
 ## Goal
 Deliver CP6 session and memory scaffolding so thread-level context is durable, compactable, and recoverable across runtime restarts.

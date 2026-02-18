@@ -1,6 +1,6 @@
 # Gravity — MVP Requirements
 
-_Last updated: 2026-02-17 (v2)_
+_Last updated: 2026-02-18 (v2)_
 _Target: Working demo for Immad call, Thursday 2026-02-20_
 _Build time budget: ~24 hours_
 
@@ -857,11 +857,11 @@ What it writes directly:
 
 Configuration:
 
-- Ingress binding: `gravity.agents.config.ingressBindings` (surface + entrypoint + session mode)
-- Proactive triggers: `gravity.agents.config.proactiveTriggers` (`cron` + `heartbeat`)
-- Delivery defaults: `gravity.agents.config.deliveryDefaults`
-- Connector/tool policy: `gravity.agents.config.capabilities`
-- Model selection: `gravity.agents.model` (single source of truth for MVP)
+- Ingress binding: compiled code-defined listener declarations (`defineAgent(...).listen`)
+- Proactive triggers: compiled code-defined trigger declarations (`defineAgent(...).proactive`)
+- Delivery defaults: code-defined runtime declarations (agent-level override + framework defaults)
+- Connector/tool policy: code-defined declarations (no runtime dependence on `gravity.agents.config` behavior blobs)
+- Model selection: code-defined declaration with framework fallback
 - Skills loading: `store/shared/skills/` (global) + `store/agents/{agent-id}/skills/` (agent-specific)
 - Memory loading: `store/agents/{agent-id}/memory/`
 - Scratch workspace: `workspace/{agent-id}/`
@@ -977,7 +977,22 @@ Each checkpoint produces a verifiable working state. Evaluate before moving on �
 
 **Eval:** "Is the state ownership split (Postgres vs files) working as designed? Can the agent see itself in the system?"
 
+### CP5.1: Rearchitecture parity (code-defined control plane)
+
+- [ ] `defineConfig(...)` + `defineAgent(...)` contracts in place for code-defined agents
+- [ ] Runtime declarations compiled from code (routing, proactive triggers, session defaults)
+- [ ] Slack slash/message/proactive execution paths consume compiled declarations (not JSONB config resolvers)
+- [ ] Single executor seam is enforced for all tool calls (`Executor` + per-agent runtime selection)
+- [ ] Host executor remains default for MVP while sandbox executor is scaffolded but disabled by default
+- [ ] Legacy JSONB-driven runtime modules removed after parity checks
+- [ ] Parity proof remains green (`npm run verify:cp5`, `npm run verify:cp10`, and `npm run check`)
+- [ ] Stable IDs (`runId`, `agentId`, `sessionKey`) preserved through the cutover
+
+**Eval:** "Did we simplify the runtime without regressions? Can new engineers follow one clear architecture path?"
+
 ### CP6: Sessions + memory scaffolding
+
+_Status: on hold until CP5.1 rearchitecture parity is complete._
 
 - [ ] Dual-history system: `log.jsonl` (permanent, append-only) + `context.jsonl` (compactable) per thread
 - [ ] Thread-based sessions working (different threads = different context windows)
@@ -1176,6 +1191,14 @@ Security invariant: no side effects occur without passing policy gates first.
 **MVP stance:** Single process, trust-based. Agents are ones we wrote, data is test data. The Lethal Trifecta is defined per-agent in agent config but not enforced in code. This is fine — there's no untrusted input, no production data, no external sends. The architecture knows where enforcement will go.
 
 ### Security roadmap (post-demo)
+
+**Phase 0 — Executor boundary scaffold (during CP5.1 rearchitecture, pre-demo)**
+
+All tool calls route through a single executor interface with per-agent runtime selection, but still execute locally by default.
+
+- Host executor remains the active MVP runtime.
+- Sandbox executor wiring exists as a disabled path (no isolation guarantees yet).
+- This phase is architecture scaffolding only, not production security enforcement.
 
 **Phase 1 — Tool policy (weeks 1-2, config only, no infrastructure)**
 
