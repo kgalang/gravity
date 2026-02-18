@@ -427,7 +427,7 @@ async function resolveMessageDecision(
   }
 
   const activeThreadSession =
-    !message.isDirectMessage && message.threadTs !== message.messageTs
+    message.threadTs !== message.messageTs
       ? await findActiveThreadSession(dbClient, message.channelId, message.threadTs)
       : null;
 
