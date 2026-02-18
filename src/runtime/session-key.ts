@@ -29,6 +29,28 @@ export function buildSlashThreadSessionKey(
   return buildThreadSessionKey(agentId, threadTs);
 }
 
+export function buildSlashSessionKey(input: {
+  agentId: string;
+  channelId: string;
+  threadTs: string;
+  sourceEventId: string;
+  sessionMode: SessionMode;
+}): string {
+  if (input.sessionMode === "main") {
+    return buildMainSessionKey(input.agentId);
+  }
+
+  if (input.sessionMode === "isolated") {
+    return buildIsolatedSessionKey(input.agentId, input.sourceEventId);
+  }
+
+  if (input.threadTs.trim().length === 0) {
+    return buildDmThreadFallbackSessionKey(input.agentId, input.channelId);
+  }
+
+  return buildSlashThreadSessionKey(input.agentId, input.threadTs);
+}
+
 export function buildMessageSessionKey(input: {
   agentId: string;
   channelId: string;

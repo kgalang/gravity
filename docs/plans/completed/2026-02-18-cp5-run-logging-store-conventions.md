@@ -18,7 +18,7 @@ CP5 focuses on verification and contract-hardening, not major runtime expansion.
 - [x] Define CP5 verification matrix for slash, non-slash, and proactive trigger runs.
 - [x] Validate `gravity.runs` lifecycle writes (start, success/failure, summaries, stable IDs) across trigger paths.
 - [x] Validate failure-path persistence in `gravity.runs` (error fields + completion timestamps).
-- [x] Verify `store/` directory contracts remain stable (`shared/skills`, `shared/connectors`, `agents/{agentId}/{skills,memory}`).
+- [x] Verify `store/` directory contracts remain stable (`shared/skills`, `shared/resources`, `agents/{agentId}/{skills,memory}`).
 - [x] Validate `store/shared/skills/query-gravity.md` behavior for agent/config/run introspection.
 - [x] Validate `store/shared/skills/rollback.md` behavior with a controlled skill edit + git rollback.
 - [x] Confirm `store/` versioning workflow uses the repo git history cleanly (no nested repo requirement).

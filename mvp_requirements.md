@@ -252,10 +252,10 @@ Every time an agent responds, it assembles context from agent-scoped paths:
 ```
 [0] System Prompt
     ├── Agent identity and role (from gravity.agents registry)
-    ├── Shared skills (store/shared/skills/*.md)
-    ├── Agent-specific skills (store/agents/{agent-id}/skills/*.md)
+    ├── Capability-derived shared skills (store/shared/skills/*.md)
+    ├── Agent-specific skill overlays (store/agents/{agent-id}/skills/*.md; migration bridge)
     ├── Memory (store/agents/{agent-id}/memory/MEMORY.md)
-    └── Connector configs (store/shared/connectors/ + agent config)
+    └── Resource docs/config (store/shared/resources/ + capability bindResources)
 [1] Conversation History (from workspace/{agent-id}/sessions/{session-key}/context.jsonl — may include compaction summaries)
 [2] Current Message (with timestamp, username, attachments)
 ```
@@ -627,26 +627,29 @@ Config primitives:
 - `ingressBindings`: message entrypoints (`slash_command`, `app_mention`, `thread_reply`, `direct_message`).
 - `proactiveTriggers`: scheduler-owned trigger definitions (`cron`, `heartbeat`) with session mode and delivery target.
 - `deliveryDefaults`: fallback delivery when a specific trigger does not override delivery.
-- `capabilities`: connectors and tool policy.
+- `useCapabilities`: capability selections + resource bindings + derived tool policy.
 - `policy`: access constraints and quiet hours.
 
 ```json
 {
-  "capabilities": {
-    "connectors": [
-      {
-        "id": "primary-duckdb",
-        "kind": "duckdb",
-        "config": {
-          "path": "/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb"
-        }
-      }
-    ],
-    "tools": {
-      "allow": ["read", "bash"],
-      "deny": []
+  "resources": [
+    {
+      "id": "primary-duckdb",
+      "kind": "duckdb",
+      "path": "/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb"
     }
-  },
+  ],
+  "useCapabilities": [
+    {
+      "capability": "query-gravity-v1"
+    },
+    {
+      "capability": "duckdb-analyst-v1",
+      "bindResources": {
+        "warehouse": "primary-duckdb"
+      }
+    }
+  ],
   "ingressBindings": [
     {
       "id": "slack-wiggs-slash",
@@ -969,7 +972,7 @@ Each checkpoint produces a verifiable working state. Evaluate before moving on �
 ### CP5: Run logging + store conventions verified
 
 - [ ] Runs logged to `gravity.runs` after each interaction (log-run skill working)
-- [ ] `store/` directory conventions solid (shared/, agents/, connectors/)
+- [ ] `store/` directory conventions solid (shared/, agents/, resources/)
 - [ ] Git repo initialized for `store/`
 - [ ] `query-gravity.md` skill working — agent can introspect its own config and history
 - [ ] `rollback.md` skill working — agent can revert a skill change via git

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runtimeConfig } from "../../agents/index.js";
 import { loadConfig } from "../../src/runtime/config.js";
 
 describe("loadConfig", () => {
@@ -17,9 +18,10 @@ describe("loadConfig", () => {
   });
 
   it("uses explicit environment overrides", () => {
+    const databaseUrlEnvVar = runtimeConfig.infra.database.urlEnvVar;
     const config = loadConfig({
       GRAVITY_ENV: "test",
-      DATABASE_URL: "postgres://custom-url",
+      [databaseUrlEnvVar]: "postgres://custom-url",
       GRAVITY_LIVENESS_INTERVAL_SECONDS: "45",
     });
 
@@ -34,10 +36,13 @@ describe("loadConfig", () => {
   });
 
   it("normalizes optional Slack tokens", () => {
+    const slackAppTokenEnvVar = runtimeConfig.infra.slack.appTokenEnvVar;
+    const slackBotTokenEnvVar = runtimeConfig.infra.slack.botTokenEnvVar;
+    const modelApiKeyEnvVar = runtimeConfig.infra.modelProvider.apiKeyEnvVar;
     const config = loadConfig({
-      SLACK_APP_TOKEN: "  xapp-abc  ",
-      SLACK_BOT_TOKEN: "",
-      ANTHROPIC_API_KEY: "  key-123  ",
+      [slackAppTokenEnvVar]: "  xapp-abc  ",
+      [slackBotTokenEnvVar]: "",
+      [modelApiKeyEnvVar]: "  key-123  ",
     });
 
     expect(config.slackAppToken).toBe("xapp-abc");

@@ -8,7 +8,9 @@ describe("createExecutorManager", () => {
 
     expect(executor.id).toBe("host");
     expect(executor.runtime).toBe("host");
-    expect(executor.createTools(process.cwd()).length).toBe(2);
+    expect(executor.createTools(process.cwd(), ["read", "bash"]).length).toBe(2);
+    expect(executor.createTools(process.cwd(), ["read"]).length).toBe(1);
+    expect(executor.createTools(process.cwd(), []).length).toBe(0);
   });
 
   it("fails closed when sandbox runtime is requested while disabled", () => {
@@ -27,7 +29,7 @@ describe("createExecutorManager", () => {
 
     expect(executor.id).toBe("sandbox-scaffold-disabled");
     expect(executor.runtime).toBe("sandbox");
-    expect(() => executor.createTools(process.cwd())).toThrow(
+    expect(() => executor.createTools(process.cwd(), ["read"])).toThrow(
       /scaffold is disabled/i,
     );
   });

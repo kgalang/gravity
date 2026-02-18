@@ -1,3 +1,5 @@
+import { runtimeConfig } from "../../agents/index.js";
+
 export type AppConfig = {
   env: string;
   databaseUrl: string;
@@ -6,6 +8,9 @@ export type AppConfig = {
   slackBotToken: string | null;
   anthropicApiKey: string | null;
 };
+
+const DEFAULT_DATABASE_URL =
+  "postgres://gravity:gravity@localhost:5432/gravity?sslmode=disable";
 
 function normalizeOptionalEnv(value: string | undefined): string | null {
   if (!value) {
@@ -17,6 +22,10 @@ function normalizeOptionalEnv(value: string | undefined): string | null {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
+  const databaseUrlEnvVar = runtimeConfig.infra.database.urlEnvVar;
+  const slackAppTokenEnvVar = runtimeConfig.infra.slack.appTokenEnvVar;
+  const slackBotTokenEnvVar = runtimeConfig.infra.slack.botTokenEnvVar;
+  const modelApiKeyEnvVar = runtimeConfig.infra.modelProvider.apiKeyEnvVar;
   const livenessIntervalRaw = env.GRAVITY_LIVENESS_INTERVAL_SECONDS ?? "30";
   const livenessIntervalSeconds = Number(livenessIntervalRaw);
 
@@ -31,12 +40,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
 
   return {
     env: env.GRAVITY_ENV ?? "dev",
-    databaseUrl:
-      env.DATABASE_URL ??
-      "postgres://gravity:gravity@localhost:5432/gravity?sslmode=disable",
+    databaseUrl: env[databaseUrlEnvVar] ?? DEFAULT_DATABASE_URL,
     livenessIntervalSeconds,
-    slackAppToken: normalizeOptionalEnv(env.SLACK_APP_TOKEN),
-    slackBotToken: normalizeOptionalEnv(env.SLACK_BOT_TOKEN),
-    anthropicApiKey: normalizeOptionalEnv(env.ANTHROPIC_API_KEY),
+    slackAppToken: normalizeOptionalEnv(env[slackAppTokenEnvVar]),
+    slackBotToken: normalizeOptionalEnv(env[slackBotTokenEnvVar]),
+    anthropicApiKey: normalizeOptionalEnv(env[modelApiKeyEnvVar]),
   };
 }

@@ -113,7 +113,7 @@ describe("createAgentRegistry", () => {
           },
         },
       ],
-      tools: ["query-gravity"],
+      useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
     });
     const second = defineAgent({
       id: "duplicate-agent",
@@ -129,7 +129,7 @@ describe("createAgentRegistry", () => {
           },
         },
       ],
-      tools: ["query-gravity"],
+      useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
     });
 
     expect(() =>
@@ -155,7 +155,7 @@ describe("createAgentRegistry", () => {
           },
         },
       ],
-      tools: ["query-gravity"],
+      useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
     });
     const second = defineAgent({
       id: "beta",
@@ -171,7 +171,7 @@ describe("createAgentRegistry", () => {
           },
         },
       ],
-      tools: ["query-gravity"],
+      useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
     });
 
     expect(() =>
@@ -221,7 +221,7 @@ describe("createAgentRegistry", () => {
               },
             ],
           },
-          tools: ["query-gravity"],
+          useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
         }),
       ],
     }).compiledDeclarations;
@@ -268,6 +268,98 @@ describe("createAgentRegistry", () => {
     });
   });
 
+  it("omits proactive quiet hours when policy is explicitly disabled", () => {
+    const configWithDisabledQuietHours = defineConfig({
+      infra: {
+        database: {
+          urlEnvVar: "DATABASE_URL",
+        },
+        slack: {
+          appTokenEnvVar: "SLACK_APP_TOKEN",
+          botTokenEnvVar: "SLACK_BOT_TOKEN",
+        },
+        modelProvider: {
+          provider: "anthropic",
+          apiKeyEnvVar: "ANTHROPIC_API_KEY",
+        },
+      },
+      defaults: {
+        model: "claude-sonnet-4-5-20250929",
+        runtime: "host",
+        sessionMode: "thread",
+        quietHours: {
+          enabled: false,
+          timezone: "UTC",
+          startHour: 0,
+          endHour: 0,
+        },
+      },
+      paths: {
+        sharedRoot: "store/shared",
+        workspaceRoot: "workspace",
+      },
+    });
+
+    const compiled = createAgentRegistry({
+      config: configWithDisabledQuietHours,
+      agents: [
+        defineAgent({
+          id: "alpha",
+          name: "Alpha",
+          listen: [
+            {
+              id: "alpha-slash",
+              kind: "message",
+              surface: "slack",
+              entrypoint: "slash_command",
+              match: {
+                command: "/alpha",
+              },
+            },
+          ],
+          proactive: {
+            deliveryDefaults: {
+              surface: "slack",
+              mode: "dm",
+              userId: "U999",
+            },
+            triggers: [
+              {
+                id: "heartbeat",
+                kind: "heartbeat",
+                intervalSeconds: 300,
+                prompt: "ping",
+              },
+            ],
+          },
+          useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
+        }),
+      ],
+    }).compiledDeclarations;
+
+    expect(compiled.proactive.triggers).toEqual([
+      {
+        agentId: "alpha",
+        triggerId: "heartbeat",
+        kind: "heartbeat",
+        intervalSeconds: 300,
+        prompt: "ping",
+        sessionMode: "isolated",
+        delivery: {
+          surface: "slack",
+          mode: "dm",
+          userId: "U999",
+        },
+        trigger: {
+          triggerKind: "heartbeat",
+          surface: "system",
+          entrypoint: "heartbeat",
+          runIdPattern: "{sourceEventId}",
+        },
+      },
+    ]);
+  });
+
   it("throws when a proactive trigger cannot resolve a delivery target", () => {
     expect(() =>
       createAgentRegistry({
@@ -297,7 +389,7 @@ describe("createAgentRegistry", () => {
                 },
               ],
             },
-            tools: ["query-gravity"],
+            useCapabilities: [{ capability: "query-gravity-v1", bindResources: {} }],
           }),
         ],
       }),

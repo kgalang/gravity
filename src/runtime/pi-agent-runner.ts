@@ -1,7 +1,11 @@
-import { mkdir, readdir, readFile, stat } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import type { AgentConnector } from "../../agents/contracts.js";
 import { agentRegistry } from "../../agents/index.js";
+import type { CompiledAgentCapabilities } from "../../agents/capability-compiler.js";
+import {
+  assembleTurnContext,
+  type ContextAssemblerAgent,
+} from "./context-assembler.js";
 import { type Api, getModels, type Model } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
@@ -23,8 +27,6 @@ import type {
 } from "./executor-manager.js";
 
 const DEFAULT_ANTHROPIC_MODEL_ID = "claude-sonnet-4-5";
-const MAX_DBT_CONTEXT_FILES = 10;
-const MAX_DBT_FILE_CHARS = 6000;
 
 type AgentRuntimeRecord = {
   id: string;
@@ -33,12 +35,7 @@ type AgentRuntimeRecord = {
   model: string;
   skills_path: string | null;
   memory_path: string | null;
-  connectors: readonly AgentConnector[];
-};
-
-type LoadedDocument = {
-  filePath: string;
-  content: string;
+  compiledCapabilities: CompiledAgentCapabilities;
 };
 
 const AgentAssistantMessageSchema = Type.Object(
@@ -96,15 +93,6 @@ function resolvePathFromRepoRoot(inputPath: string): string {
   return path.resolve(process.cwd(), inputPath);
 }
 
-function normalizeUserPrompt(prompt: string): string {
-  const normalized = prompt.trim();
-  if (normalized.length > 0) {
-    return normalized;
-  }
-
-  return "No question was provided. Ask for clarification and suggest example DuckDB business questions.";
-}
-
 function resolveAnthropicModelId(preferredModelId: string): Model<Api> {
   const models = getModels("anthropic");
   if (models.length === 0) {
@@ -150,202 +138,6 @@ function extractAssistantText(content: unknown): string {
   return textParts.join("\n\n").trim();
 }
 
-async function readMarkdownFiles(dirPath: string): Promise<LoadedDocument[]> {
-  try {
-    const directoryEntries = await readdir(dirPath, { withFileTypes: true });
-    const markdownFiles = directoryEntries
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
-      .map((entry) => entry.name)
-      .sort();
-
-    const loadedFiles = await Promise.all(
-      markdownFiles.map(async (fileName) => {
-        const filePath = path.join(dirPath, fileName);
-        const content = await readFile(filePath, "utf8");
-        return {
-          filePath,
-          content: content.trim(),
-        } satisfies LoadedDocument;
-      }),
-    );
-
-    return loadedFiles.filter((document) => document.content.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-async function readOptionalFile(filePath: string): Promise<string | null> {
-  try {
-    const content = await readFile(filePath, "utf8");
-    const trimmed = content.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  } catch {
-    return null;
-  }
-}
-
-async function walkDbtMetadataFiles(modelsDir: string): Promise<string[]> {
-  const discoveredFiles: string[] = [];
-  const stack = [modelsDir];
-
-  while (stack.length > 0) {
-    const nextDir = stack.pop();
-    if (!nextDir) {
-      continue;
-    }
-
-    let entries: Array<{ isDirectory: () => boolean; isFile: () => boolean; name: string }>;
-    try {
-      const dirEntries = await readdir(nextDir, {
-        withFileTypes: true,
-        encoding: "utf8",
-      });
-      entries = dirEntries;
-    } catch {
-      continue;
-    }
-
-    const sortedEntries = [...entries].sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of sortedEntries) {
-      const entryPath = path.join(nextDir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(entryPath);
-        continue;
-      }
-
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      if (
-        entry.name.endsWith(".yml") ||
-        entry.name.endsWith(".yaml") ||
-        entry.name.endsWith(".md")
-      ) {
-        discoveredFiles.push(entryPath);
-      }
-    }
-  }
-
-  discoveredFiles.sort();
-  return discoveredFiles.slice(0, MAX_DBT_CONTEXT_FILES);
-}
-
-async function loadDbtContextFromDuckdbConnectorPath(
-  duckdbConnectorPath: string | null,
-): Promise<LoadedDocument[]> {
-  if (!duckdbConnectorPath) {
-    return [];
-  }
-
-  const projectRoot = path.dirname(duckdbConnectorPath);
-  const modelsDir = path.join(projectRoot, "models");
-
-  try {
-    const modelsDirStats = await stat(modelsDir);
-    if (!modelsDirStats.isDirectory()) {
-      return [];
-    }
-  } catch {
-    return [];
-  }
-
-  const metadataFilePaths = await walkDbtMetadataFiles(modelsDir);
-  const documents: LoadedDocument[] = [];
-
-  for (const metadataFilePath of metadataFilePaths) {
-    const content = await readOptionalFile(metadataFilePath);
-    if (!content) {
-      continue;
-    }
-
-    documents.push({
-      filePath: metadataFilePath,
-      content: content.slice(0, MAX_DBT_FILE_CHARS).trim(),
-    });
-  }
-
-  return documents;
-}
-
-function formatLoadedDocuments(
-  heading: string,
-  documents: LoadedDocument[],
-): string {
-  if (documents.length === 0) {
-    return `${heading}\n(none loaded)`;
-  }
-
-  const sections = documents.map((document) => {
-    return [
-      `File: ${document.filePath}`,
-      "```markdown",
-      document.content,
-      "```",
-    ].join("\n");
-  });
-
-  return [heading, ...sections].join("\n\n");
-}
-
-function buildSystemPrompt(input: {
-  agent: AgentRuntimeRecord;
-  sharedSkills: LoadedDocument[];
-  connectorDocs: LoadedDocument[];
-  agentSkills: LoadedDocument[];
-  memoryContent: string | null;
-  dbtContextDocs: LoadedDocument[];
-  duckdbConnectorPath: string | null;
-}): string {
-  const description = input.agent.description ?? "No description provided.";
-  const memoryBlock =
-    input.memoryContent ??
-    "No prior memory is recorded yet for this agent.";
-  const duckdbConnectorPathLine =
-    input.duckdbConnectorPath ??
-    "DuckDB path not configured in duckdb connector. Ask for configuration before running queries.";
-
-  return [
-    `You are ${input.agent.name} (${input.agent.id}).`,
-    description,
-    "",
-    "Operating expectations:",
-    "- Answer directly in plain business language.",
-    "- Use DuckDB for factual claims when a query is needed.",
-    "- Show supporting metrics and call out assumptions or caveats.",
-    "- Keep responses concise and Slack-readable.",
-    "- Do not invent table or column names; inspect schema/docs when unsure.",
-    "",
-    "DuckDB execution contract:",
-    `- Preferred command pattern: duckdb ${duckdbConnectorPathLine} -cmd \"<SQL>\"`,
-    "- Use `bash` for SQL execution and `read` for inspecting files/docs.",
-    "- If output is truncated, follow the truncation hint or rerun a narrower query.",
-    "",
-    "Agent memory:",
-    "```markdown",
-    memoryBlock,
-    "```",
-    "",
-    formatLoadedDocuments("Shared skills loaded this turn:", input.sharedSkills),
-    "",
-    formatLoadedDocuments(
-      "Shared connector docs loaded this turn:",
-      input.connectorDocs,
-    ),
-    "",
-    formatLoadedDocuments(
-      "Agent-specific skills loaded this turn:",
-      input.agentSkills,
-    ),
-    "",
-    formatLoadedDocuments(
-      "dbt schema/docs context loaded this turn:",
-      input.dbtContextDocs,
-    ),
-  ].join("\n");
-}
-
 function createStaticResourceLoader(systemPrompt: string): ResourceLoader {
   const extensionRuntime = createExtensionRuntime();
 
@@ -373,7 +165,7 @@ function loadCodeDefinedAgentDetails(agentId: string): {
   name: string;
   description: string | null;
   model: string;
-  connectors: readonly AgentConnector[];
+  compiledCapabilities: CompiledAgentCapabilities;
 } {
   const registered = agentRegistry.agentsById.get(agentId);
   if (!registered) {
@@ -384,24 +176,8 @@ function loadCodeDefinedAgentDetails(agentId: string): {
     name: registered.declaration.name,
     description: registered.declaration.description ?? null,
     model: registered.model,
-    connectors: registered.declaration.connectors ?? [],
+    compiledCapabilities: registered.compiledCapabilities,
   };
-}
-
-function connectorTypeNames(connectors: readonly AgentConnector[]): readonly string[] {
-  return connectors.map((connector) => connector.type);
-}
-
-function resolveDuckdbConnectorPath(
-  connectors: readonly AgentConnector[],
-): string | null {
-  for (const connector of connectors) {
-    if (connector.type === "duckdb") {
-      return connector.path;
-    }
-  }
-
-  return null;
 }
 
 async function loadAgentRuntimeRecord(
@@ -432,14 +208,27 @@ async function loadAgentRuntimeRecord(
     model: declaration.model,
     skills_path: row.skills_path,
     memory_path: row.memory_path,
-    connectors: declaration.connectors,
+    compiledCapabilities: declaration.compiledCapabilities,
+  };
+}
+
+function toAssemblerAgent(record: AgentRuntimeRecord): ContextAssemblerAgent {
+  return {
+    id: record.id,
+    name: record.name,
+    description: record.description,
+    capabilityProfile: record.compiledCapabilities,
+    skillsPath: asStringOrNull(record.skills_path),
+    memoryPath: asStringOrNull(record.memory_path),
   };
 }
 
 function createSessionContextPath(agentId: string, sessionKey: string): string {
+  const workspaceRoot = resolvePathFromRepoRoot(
+    agentRegistry.config.paths.workspaceRoot,
+  );
   return path.join(
-    process.cwd(),
-    "workspace",
+    workspaceRoot,
     agentId,
     "sessions",
     sessionKey,
@@ -464,50 +253,14 @@ export async function runPiAgentTurn(
   }
 
   const agent = await loadAgentRuntimeRecord(input.db, input.agentId);
-  const normalizedPrompt = normalizeUserPrompt(input.prompt);
-  const skillPath = asStringOrNull(agent.skills_path);
-  const memoryPath = asStringOrNull(agent.memory_path);
-  const connectorNames = connectorTypeNames(agent.connectors);
-  const duckdbConnectorPath = resolveDuckdbConnectorPath(agent.connectors);
-
-  const sharedSkillsDir = resolvePathFromRepoRoot("store/shared/skills");
-  const sharedConnectorsDir = resolvePathFromRepoRoot("store/shared/connectors");
-  const agentSkillsDir = skillPath ? resolvePathFromRepoRoot(skillPath) : null;
-  const agentMemoryFilePath = memoryPath
-    ? path.join(resolvePathFromRepoRoot(memoryPath), "MEMORY.md")
-    : null;
-
-  const [sharedSkills, agentSkills, dbtContextDocs] = await Promise.all([
-    readMarkdownFiles(sharedSkillsDir),
-    agentSkillsDir ? readMarkdownFiles(agentSkillsDir) : Promise.resolve([]),
-    loadDbtContextFromDuckdbConnectorPath(duckdbConnectorPath),
-  ]);
-
-  const connectorDocs = connectorNames.length > 0
-    ? await readMarkdownFiles(sharedConnectorsDir).then((documents) =>
-        documents.filter((document) =>
-          connectorNames.some((connectorName) =>
-            path.basename(document.filePath).startsWith(connectorName),
-          ),
-        ),
-      )
-    : [];
-
-  const memoryContent = agentMemoryFilePath
-    ? await readOptionalFile(agentMemoryFilePath)
-    : null;
-
-  const systemPrompt = buildSystemPrompt({
-    agent,
-    sharedSkills,
-    connectorDocs,
-    agentSkills,
-    memoryContent,
-    dbtContextDocs,
-    duckdbConnectorPath,
+  const assembledContext = await assembleTurnContext({
+    cwd: process.cwd(),
+    sharedRoot: agentRegistry.config.paths.sharedRoot,
+    prompt: input.prompt,
+    agent: toAssemblerAgent(agent),
   });
 
-  const resourceLoader = createStaticResourceLoader(systemPrompt);
+  const resourceLoader = createStaticResourceLoader(assembledContext.systemPrompt);
   const authStorage = new AuthStorage(
     path.join(process.cwd(), ".pi", "gravity", "auth.json"),
   );
@@ -516,6 +269,12 @@ export async function runPiAgentTurn(
   const modelRegistry = new ModelRegistry(authStorage);
   const model = resolveAnthropicModelId(agent.model);
   const executor = input.executorManager.resolve(input.agentRuntime);
+  const allowedToolPrimitives = agent.compiledCapabilities.toolPrimitives;
+  if (allowedToolPrimitives.length === 0) {
+    throw new Error(
+      `Agent ${agent.id} has no granted tool primitives from capabilities.`,
+    );
+  }
   const sessionContextPath = createSessionContextPath(input.agentId, input.sessionKey);
   const sessionDir = path.dirname(sessionContextPath);
   await mkdir(sessionDir, { recursive: true });
@@ -532,7 +291,7 @@ export async function runPiAgentTurn(
     modelRegistry,
     model,
     thinkingLevel: "high",
-    tools: executor.createTools(process.cwd()),
+    tools: executor.createTools(process.cwd(), allowedToolPrimitives),
     resourceLoader,
     sessionManager,
     settingsManager,
@@ -561,7 +320,7 @@ export async function runPiAgentTurn(
     }
   });
 
-  await session.prompt(normalizedPrompt);
+  await session.prompt(assembledContext.normalizedPrompt);
 
   if (sessionErrorMessage) {
     throw new Error(sessionErrorMessage);

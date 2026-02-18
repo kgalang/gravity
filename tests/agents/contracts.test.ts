@@ -70,19 +70,21 @@ describe("defineConfig", () => {
 });
 
 describe("defineAgent", () => {
-  it("normalizes listeners/tools and applies listener defaults", () => {
+  it("normalizes listeners/resources/capabilities and applies listener defaults", () => {
     const agent = defineAgent({
       id: " example-agent ",
       name: " Example Agent ",
       description: " Example description ",
       model: " claude-sonnet-4-5-20250929 ",
-      connectors: [
+      resources: [
         {
-          type: "duckdb",
+          id: " warehouse ",
+          kind: "duckdb",
           path: " /tmp/warehouse.duckdb ",
         },
         {
-          type: "knowledge-docs",
+          id: " policy-docs ",
+          kind: "knowledge-docs",
         },
       ],
       runtime: "host",
@@ -103,23 +105,59 @@ describe("defineAgent", () => {
           entrypoint: "direct_message",
         },
       ],
-      tools: [" query-gravity ", "query-gravity", " rollback "],
+      useCapabilities: [
+        {
+          capability: "query-gravity-v1",
+          bindResources: {},
+        },
+        {
+          capability: "duckdb-analyst-v1",
+          bindResources: {
+            warehouse: " warehouse ",
+          },
+        },
+        {
+          capability: "knowledge-docs-review-v1",
+          bindResources: {
+            docs: "policy-docs",
+          },
+        },
+      ],
     });
 
     expect(agent.id).toBe("example-agent");
     expect(agent.name).toBe("Example Agent");
     expect(agent.description).toBe("Example description");
     expect(agent.model).toBe("claude-sonnet-4-5-20250929");
-    expect(agent.connectors).toEqual([
+    expect(agent.resources).toEqual([
       {
-        type: "duckdb",
+        id: "warehouse",
+        kind: "duckdb",
         path: "/tmp/warehouse.duckdb",
       },
       {
-        type: "knowledge-docs",
+        id: "policy-docs",
+        kind: "knowledge-docs",
       },
     ]);
-    expect(agent.tools).toEqual(["query-gravity", "rollback"]);
+    expect(agent.useCapabilities).toEqual([
+      {
+        capability: "query-gravity-v1",
+        bindResources: {},
+      },
+      {
+        capability: "duckdb-analyst-v1",
+        bindResources: {
+          warehouse: "warehouse",
+        },
+      },
+      {
+        capability: "knowledge-docs-review-v1",
+        bindResources: {
+          docs: "policy-docs",
+        },
+      },
+    ]);
     expect(agent.listen).toEqual([
       {
         id: "slash-route",
@@ -157,29 +195,36 @@ describe("defineAgent", () => {
             entrypoint: "slash_command",
           },
         ],
-        tools: ["query-gravity"],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
       }),
     ).toThrow(/requires match\.command/);
   });
 
-  it("throws for duplicate connector types", () => {
+  it("throws for duplicate resource ids", () => {
     expect(() =>
       defineAgent({
-        id: "duplicate-connector-agent",
-        name: "Duplicate Connector Agent",
-        connectors: [
+        id: "duplicate-resource-agent",
+        name: "Duplicate Resource Agent",
+        resources: [
           {
-            type: "duckdb",
+            id: "warehouse",
+            kind: "duckdb",
             path: "/tmp/one.duckdb",
           },
           {
-            type: "duckdb",
+            id: "warehouse",
+            kind: "duckdb",
             path: "/tmp/two.duckdb",
           },
         ],
         listen: [
           {
-            id: "duplicate-connector-slash",
+            id: "duplicate-resource-slash",
             kind: "message",
             surface: "slack",
             entrypoint: "slash_command",
@@ -188,9 +233,49 @@ describe("defineAgent", () => {
             },
           },
         ],
-        tools: ["query-gravity"],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
       }),
-    ).toThrow(/duplicates connector type/i);
+    ).toThrow(/duplicates resource id/i);
+  });
+
+  it("throws when a capability references an unknown resource id", () => {
+    expect(() =>
+      defineAgent({
+        id: "unknown-resource-reference-agent",
+        name: "Unknown Resource Reference Agent",
+        resources: [
+          {
+            id: "warehouse",
+            kind: "duckdb",
+            path: "/tmp/current.duckdb",
+          },
+        ],
+        listen: [
+          {
+            id: "unknown-resource-slash",
+            kind: "message",
+            surface: "slack",
+            entrypoint: "slash_command",
+            match: {
+              command: "/unknown",
+            },
+          },
+        ],
+        useCapabilities: [
+          {
+            capability: "duckdb-analyst-v1",
+            bindResources: {
+              warehouse: "missing",
+            },
+          },
+        ],
+      } as unknown as Parameters<typeof defineAgent>[0]),
+    ).toThrow(/references unknown resource id/i);
   });
 
   it("throws when deprecated top-level duckdbPath is provided", () => {
@@ -198,9 +283,10 @@ describe("defineAgent", () => {
       defineAgent({
         id: "deprecated-duckdb-path-agent",
         name: "Deprecated DuckDB Path Agent",
-        connectors: [
+        resources: [
           {
-            type: "duckdb",
+            id: "warehouse",
+            kind: "duckdb",
             path: "/tmp/current.duckdb",
           },
         ],
@@ -216,8 +302,247 @@ describe("defineAgent", () => {
             },
           },
         ],
-        tools: ["query-gravity"],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
       } as unknown as Parameters<typeof defineAgent>[0]),
     ).toThrow(/duckdbPath has been removed/i);
+  });
+
+  it("throws when deprecated connectors field is provided", () => {
+    expect(() =>
+      defineAgent({
+        id: "deprecated-connectors-agent",
+        name: "Deprecated Connectors Agent",
+        connectors: [
+          {
+            type: "duckdb",
+            path: "/tmp/legacy.duckdb",
+          },
+        ],
+        listen: [
+          {
+            id: "deprecated-connectors-slash",
+            kind: "message",
+            surface: "slack",
+            entrypoint: "slash_command",
+            match: {
+              command: "/legacy-connectors",
+            },
+          },
+        ],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
+      } as unknown as Parameters<typeof defineAgent>[0]),
+    ).toThrow(/connectors has been renamed to resources/i);
+  });
+
+  it("throws when deprecated capabilities field is provided", () => {
+    expect(() =>
+      defineAgent({
+        id: "deprecated-capabilities-agent",
+        name: "Deprecated Capabilities Agent",
+        listen: [
+          {
+            id: "deprecated-capabilities-slash",
+            kind: "message",
+            surface: "slack",
+            entrypoint: "slash_command",
+            match: {
+              command: "/legacy-capabilities",
+            },
+          },
+        ],
+        capabilities: [
+          {
+            use: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
+      } as unknown as Parameters<typeof defineAgent>[0]),
+    ).toThrow(/agent\.capabilities has been renamed to useCapabilities/i);
+  });
+
+  it("throws when deprecated tools field is provided", () => {
+    expect(() =>
+      defineAgent({
+        id: "deprecated-tools-agent",
+        name: "Deprecated Tools Agent",
+        listen: [
+          {
+            id: "deprecated-tools-slash",
+            kind: "message",
+            surface: "slack",
+            entrypoint: "slash_command",
+            match: {
+              command: "/legacy-tools",
+            },
+          },
+        ],
+        tools: ["query-gravity"],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
+      } as unknown as Parameters<typeof defineAgent>[0]),
+    ).toThrow(/tools has been replaced by useCapabilities/i);
+  });
+
+  it("throws when deprecated skills field is provided", () => {
+    expect(() =>
+      defineAgent({
+        id: "deprecated-skills-agent",
+        name: "Deprecated Skills Agent",
+        listen: [
+          {
+            id: "deprecated-skills-slash",
+            kind: "message",
+            surface: "slack",
+            entrypoint: "slash_command",
+            match: {
+              command: "/legacy-skills",
+            },
+          },
+        ],
+        skills: [
+          {
+            skill: "query-gravity",
+          },
+        ],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+        ],
+      } as unknown as Parameters<typeof defineAgent>[0]),
+    ).toThrow(/skills has been replaced by useCapabilities/i);
+  });
+
+  it("allows reusing a capability with different bindResources mappings", () => {
+    const agent = defineAgent({
+      id: "multi-warehouse-agent",
+      name: "Multi Warehouse Agent",
+      resources: [
+        {
+          id: "warehouse-a",
+          kind: "duckdb",
+          path: "/tmp/warehouse-a.duckdb",
+        },
+        {
+          id: "warehouse-b",
+          kind: "duckdb",
+          path: "/tmp/warehouse-b.duckdb",
+        },
+      ],
+      listen: [
+        {
+          id: "multi-warehouse-slash",
+          kind: "message",
+          surface: "slack",
+          entrypoint: "slash_command",
+          match: {
+            command: "/multi",
+          },
+        },
+      ],
+      useCapabilities: [
+        {
+          capability: "query-gravity-v1",
+          bindResources: {},
+        },
+        {
+          capability: "duckdb-analyst-v1",
+          bindResources: {
+            warehouse: "warehouse-a",
+          },
+        },
+        {
+          capability: "duckdb-analyst-v1",
+          bindResources: {
+            warehouse: "warehouse-b",
+          },
+        },
+      ],
+    });
+
+    expect(agent.useCapabilities).toEqual([
+      {
+        capability: "query-gravity-v1",
+        bindResources: {},
+      },
+      {
+        capability: "duckdb-analyst-v1",
+        bindResources: {
+          warehouse: "warehouse-a",
+        },
+      },
+      {
+        capability: "duckdb-analyst-v1",
+        bindResources: {
+          warehouse: "warehouse-b",
+        },
+      },
+    ]);
+  });
+
+  it("throws when capability bindings are duplicated with the same signature", () => {
+    expect(() =>
+      defineAgent({
+        id: "duplicate-capability-binding-agent",
+        name: "Duplicate Capability Binding Agent",
+        resources: [
+          {
+            id: "warehouse",
+            kind: "duckdb",
+            path: "/tmp/warehouse.duckdb",
+          },
+        ],
+        listen: [
+          {
+            id: "duplicate-capability-slash",
+            kind: "message",
+            surface: "slack",
+            entrypoint: "slash_command",
+            match: {
+              command: "/dup-cap",
+            },
+          },
+        ],
+        useCapabilities: [
+          {
+            capability: "query-gravity-v1",
+            bindResources: {},
+          },
+          {
+            capability: "duckdb-analyst-v1",
+            bindResources: {
+              warehouse: "warehouse",
+            },
+          },
+          {
+            capability: "duckdb-analyst-v1",
+            bindResources: {
+              warehouse: "warehouse",
+            },
+          },
+        ],
+      }),
+    ).toThrow(/duplicates capability binding/i);
   });
 });
