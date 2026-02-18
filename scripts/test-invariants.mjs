@@ -1,5 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  REQUIRED_SHARED_SKILLS,
+  toLegacySkillsPath,
+} from "./store-conventions.mjs";
 
 const root = process.cwd();
 const errors = [];
@@ -105,6 +109,26 @@ function parseCheckpointRows(checkpointText) {
   return result;
 }
 
+function collectAgentDirectoryIds() {
+  const agentsDir = path.join(root, "store", "agents");
+  if (!existsSync(agentsDir)) {
+    return [];
+  }
+
+  return readdirSync(agentsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function assertNoLegacySkillsDirectory(agentId, reason) {
+  const legacySkillsPath = toLegacySkillsPath(agentId);
+  const legacySkillsDir = path.join(root, legacySkillsPath);
+  if (existsSync(legacySkillsDir)) {
+    addError(`${reason}: ${legacySkillsPath}`);
+  }
+}
+
 function invariantMigrationScaffold() {
   const migrationsDir = path.join(root, "db/migrations");
   if (!existsSync(migrationsDir)) {
@@ -185,17 +209,24 @@ function invariantSeedAgentFilesystemParity() {
   }
 
   for (const agentId of new Set(ids)) {
-    const skillsDir = path.join(root, "store", "agents", agentId, "skills");
     const memoryFile = path.join(root, "store", "agents", agentId, "memory", "MEMORY.md");
 
-    if (!existsSync(skillsDir)) {
-      addError(`seed.sql agent "${agentId}" is missing skills directory: store/agents/${agentId}/skills`);
-    }
+    assertNoLegacySkillsDirectory(
+      agentId,
+      `Legacy skills directory must be removed for "${agentId}"`,
+    );
     if (!existsSync(memoryFile)) {
       addError(
         `seed.sql agent "${agentId}" is missing memory file: store/agents/${agentId}/memory/MEMORY.md`,
       );
     }
+  }
+
+  if (/store\/agents\/[^']+\/skills/.test(seedText)) {
+    addError(
+      "seed.sql still references legacy agent-local skills paths. " +
+        "Use shared skill capability bindings and keep skills_path NULL.",
+    );
   }
 }
 
@@ -420,15 +451,7 @@ function invariantStoreConventions() {
     }
   }
 
-  const requiredSharedSkills = [
-    "store/shared/skills/duckdb-query.md",
-    "store/shared/skills/knowledge-docs-review.md",
-    "store/shared/skills/log-run.md",
-    "store/shared/skills/query-gravity.md",
-    "store/shared/skills/rollback.md",
-    "store/shared/skills/self-author.md",
-  ];
-  for (const relativePath of requiredSharedSkills) {
+  for (const relativePath of REQUIRED_SHARED_SKILLS) {
     if (!existsSync(path.join(root, relativePath))) {
       addError(`Store convention missing shared skill: ${relativePath}`);
     }
@@ -439,6 +462,13 @@ function invariantStoreConventions() {
     addError(
       `Nested git directory found under store/: store/${nestedGitDir}. ` +
         "Use repository root git history; do not initialize a separate store repo.",
+    );
+  }
+
+  for (const agentId of collectAgentDirectoryIds()) {
+    assertNoLegacySkillsDirectory(
+      agentId,
+      "Legacy agent-local skills directory is not allowed",
     );
   }
 }

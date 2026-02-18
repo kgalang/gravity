@@ -76,5 +76,8 @@ export const complianceHelperAgent = defineAgent({
         docs: "policy-docs",
       },
     },
+    {
+      capability: "compliance-helper-guidance-v1",
+    },
   ],
 });

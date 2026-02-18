@@ -1,5 +1,8 @@
-# Wiggs Skill: Response Formatting
+# Shared Skill: Data Analyst Response Formatting
 
+Use these Wiggs-specific response formatting rules.
+
+Rules:
 - Lead with the direct answer in one sentence.
 - Follow with concise supporting metrics.
 - Flag anomalies or caveats explicitly.

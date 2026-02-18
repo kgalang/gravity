@@ -46,7 +46,7 @@ One-writer contract:
 Compatibility window for skills/memory paths:
 - Existing `store/` paths remain valid during this migration.
 - Skill composition contract (2026-02-18 decision): canonical skill definitions live in `store/shared/skills`, and agents apply them via capability definitions referenced from `defineAgent(...).useCapabilities`.
-- `store/agents/{agentId}/skills` is a legacy bridge and is scheduled for removal in CP6 (no long-lived compatibility acceptance).
+- CP6 outcome (2026-02-18): runtime no longer loads `store/agents/{agentId}/skills`, and agent-local skills directories are not part of the supported topology.
 - Memory remains agent-scoped at `store/agents/{agentId}/memory/MEMORY.md`.
 - Final path consolidation for memory/resources (`store/` only vs full co-location) remains deferred.
 

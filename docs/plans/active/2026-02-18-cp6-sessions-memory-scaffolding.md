@@ -23,7 +23,7 @@ Pre-MVP configuration policy is fail-closed: invalid config must stop feature ac
 ## Priority Update (2026-02-18)
 Before deeper session/compaction work, simplify the skill abstraction boundary:
 - Canonicalize skill definitions under `store/shared/skills`.
-- Keep `defineAgent(...).skills` bindings as the explicit skill application surface.
+- Keep `defineAgent(...).useCapabilities` bindings as the explicit skill application surface.
 - Migrate and remove `store/agents/{agentId}/skills` immediately in this checkpoint (no long-lived compatibility period).
 
 ## CP6 In/Out
@@ -31,10 +31,10 @@ Before deeper session/compaction work, simplify the skill abstraction boundary:
 - Out of scope: full CP7 reliability matrix, CP8 auto-commit/self-author loop, and CP11 demo polish.
 
 ## Work Items
-- [ ] Lock docs contract: shared-skill catalog is canonical and agent-local skills folders are removal targets in this checkpoint.
-- [ ] Migrate existing agent-local skill docs to namespaced entries in `store/shared/skills`.
-- [ ] Remove runtime loading of `store/agents/{agentId}/skills` from context assembly and keep only declared shared skill loading.
-- [ ] Delete agent-local skills directories and update invariants/tests/verification scripts to enforce shared-skill-only topology.
+- [x] Lock docs contract: shared-skill catalog is canonical and agent-local skills folders are removal targets in this checkpoint.
+- [x] Migrate existing agent-local skill docs to namespaced entries in `store/shared/skills`.
+- [x] Remove runtime loading of `store/agents/{agentId}/skills` from context assembly and keep only declared shared skill loading.
+- [x] Delete agent-local skills directories and update invariants/tests/verification scripts to enforce shared-skill-only topology.
 - [ ] Define CP6 validation matrix for session isolation, compaction, and memory reload behavior.
 - [ ] Implement dual-history session file contract under `workspace/{agentId}/sessions/{sessionKey}/`.
 - [ ] Ensure per-turn `MEMORY.md` is loaded and reflected on immediate next turn.

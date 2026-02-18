@@ -20,7 +20,6 @@ Keep moving parts explicit and replaceable.
 - `CapabilityBindingContract` (`agents/contracts.ts`): typed `useCapabilities[]` + `bindResources` agent contract with compile-time slot/resource-kind checks.
 - `CapabilityCompiler` (`agents/capability-compiler.ts`): compiles capability bindings into per-agent runtime capability profile (required skills/resources + tool grants).
 - `SkillResolver` (`src/runtime/context-assembler.ts`): resolves capability-derived shared skill IDs to shared skill markdown each turn (no caching).
-- `AgentLocalSkillOverlay` (`src/runtime/context-assembler.ts`): loader for `store/agents/{agentId}/skills/*.md` overlays.
 - `MemoryStore`: loads/writes `MEMORY.md` per agent.
 - `ContextAssembler` (`src/runtime/context-assembler.ts`): builds per-turn system context from compiled capability profile + memory + resource contributions.
 - `TurnRunner` (`PiAgentRunner` for CP4): executes one model turn via `pi-coding-agent` and tool surface.
@@ -71,8 +70,6 @@ Keep moving parts explicit and replaceable.
 - `CapabilityCompiler` rollback path: inline capability expansion in runner/context code while preserving capability declarations in `agents/contracts.ts`.
 - `SkillResolver` owner: platform runtime layer.
 - `SkillResolver` rollback path: revert context assembly to direct shared skill loading while preserving capability-derived skill IDs.
-- `AgentLocalSkillOverlay` owner: platform runtime layer.
-- `AgentLocalSkillOverlay` rollback path: disable overlay loading and rely on shared skills only.
 - `ContextAssembler` owner: platform runtime layer.
 - `ContextAssembler` rollback path: inline context assembly in runner code while preserving per-turn reload semantics.
 - `RunLifecycleLogger` owner: platform runtime layer.

@@ -4,13 +4,13 @@
 - Runtime process: `src/` (single process scaffold, later to host Slack loop + scheduling + tool dispatch).
 - Queryable durable state: Postgres schema `gravity` (versioned in `db/migrations/`, bootstrap snapshot in `schema.sql`).
 - Query layer: Kysely + pg dialect (`src/runtime/db.ts`).
-- Durable file state: `store/` (shared skills/resources/knowledge, agent memory; agent-local skill overlays are pending removal in CP6).
+- Durable file state: `store/` (shared skills/resources/knowledge and agent memory).
 - Ephemeral runtime state: `workspace/` (session logs, compactable context, scratch).
 
 CP5.1 migration note:
 - Runtime behavior source of truth is moving to code-defined agent declarations.
 - `gravity.agents` remains a queryable projection/registry surface, not canonical behavior config.
-- Capability composition source of truth is `defineAgent(...).useCapabilities`; capabilities resolve shared skills/resources/tool grants, and CP6 removes agent-local skill directory loading before broader session scaffolding work.
+- Capability composition source of truth is `defineAgent(...).useCapabilities`; capabilities resolve shared skills/resources/tool grants, and runtime no longer loads `store/agents/{agentId}/skills`.
 
 ## Durable State Contract
 - `gravity.agents`: queryable agent registry projection and metadata surface.
@@ -18,7 +18,6 @@ CP5.1 migration note:
 - `gravity.runs`: canonical run log and audit surface.
 - `gravity.skill_versions`: canonical skill evolution log.
 - `store/shared/skills`: canonical skill catalog inherited/composed by all agents (platform primitives + namespaced agent-specific modules).
-- `store/agents/{agentId}/skills`: legacy path scheduled for removal in CP6; runtime target state does not load this path.
 - `store/agents/{agentId}/memory/MEMORY.md`: persistent memory loaded each turn.
 
 ## Session Contract (Target)

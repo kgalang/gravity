@@ -20,6 +20,7 @@ import {
   createRunContext,
   withRunLifecycle,
 } from "../src/runtime/run-lifecycle.js";
+import { REQUIRED_SHARED_SKILLS } from "./store-conventions.mjs";
 
 type RunScenario = {
   name: string;
@@ -56,18 +57,11 @@ function assertStoreConventions(repoRoot: string): void {
     "store/shared/skills",
     "store/shared/resources",
     "store/shared/knowledge",
-    "store/agents/data-analyst/skills",
     "store/agents/data-analyst/memory",
-    "store/agents/compliance-helper/skills",
     "store/agents/compliance-helper/memory",
   ];
   const requiredFiles = [
-    "store/shared/skills/duckdb-query.md",
-    "store/shared/skills/knowledge-docs-review.md",
-    "store/shared/skills/log-run.md",
-    "store/shared/skills/query-gravity.md",
-    "store/shared/skills/rollback.md",
-    "store/shared/skills/self-author.md",
+    ...REQUIRED_SHARED_SKILLS,
     "store/agents/data-analyst/memory/MEMORY.md",
     "store/agents/compliance-helper/memory/MEMORY.md",
   ];

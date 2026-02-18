@@ -104,5 +104,8 @@ export const dataAnalystAgent = defineAgent({
         warehouse: "warehouse",
       },
     },
+    {
+      capability: "data-analyst-guidance-v1",
+    },
   ],
 });

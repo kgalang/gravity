@@ -16,7 +16,7 @@ INSERT INTO gravity.agents (
     'claude-sonnet-4-5-20250929',
     'active',
     'C0AFKMMDV4J',
-    'store/agents/data-analyst/skills',
+    NULL,
     'store/agents/data-analyst/memory',
     jsonb_build_object(
       'connector', 'duckdb',
@@ -99,7 +99,7 @@ INSERT INTO gravity.agents (
     'claude-sonnet-4-5-20250929',
     'active',
     'C0AFYK6AVQR',
-    'store/agents/compliance-helper/skills',
+    NULL,
     'store/agents/compliance-helper/memory',
     jsonb_build_object(
       'connector', 'knowledge-docs',

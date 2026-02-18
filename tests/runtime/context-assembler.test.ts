@@ -27,12 +27,10 @@ describe("assembleTurnContext", () => {
     const sharedRoot = path.join(tempRoot, "store", "shared");
     const sharedSkillsDir = path.join(sharedRoot, "skills");
     const sharedResourcesDir = path.join(sharedRoot, "resources");
-    const agentSkillsDir = path.join(tempRoot, "store", "agents", "alpha", "skills");
     const agentMemoryDir = path.join(tempRoot, "store", "agents", "alpha", "memory");
 
     await mkdir(sharedSkillsDir, { recursive: true });
     await mkdir(sharedResourcesDir, { recursive: true });
-    await mkdir(agentSkillsDir, { recursive: true });
     await mkdir(agentMemoryDir, { recursive: true });
 
     await writeFile(path.join(sharedSkillsDir, "query-gravity.md"), "Shared skill", "utf8");
@@ -42,7 +40,6 @@ describe("assembleTurnContext", () => {
       "DuckDB resource docs",
       "utf8",
     );
-    await writeFile(path.join(agentSkillsDir, "alpha.md"), "Agent skill", "utf8");
     await writeFile(path.join(agentMemoryDir, "MEMORY.md"), "Prior memory", "utf8");
 
     const duckdbProjectDir = path.join(tempRoot, "warehouse");
@@ -81,7 +78,6 @@ describe("assembleTurnContext", () => {
             },
           ],
         }),
-        skillsPath: "store/agents/alpha/skills",
         memoryPath: "store/agents/alpha/memory",
       },
     });
@@ -155,7 +151,6 @@ describe("assembleTurnContext", () => {
             },
           ],
         }),
-        skillsPath: null,
         memoryPath: null,
       },
     });

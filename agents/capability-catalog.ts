@@ -55,6 +55,26 @@ export const capabilityCatalog = {
       "- `knowledge-docs-review-v1`: ground policy/process recommendations in the bound knowledge-docs resource.",
     ],
   },
+  "data-analyst-guidance-v1": {
+    resourceSlots: {},
+    skills: ["data-analyst-query-patterns", "data-analyst-response-formatting"],
+    grants: {
+      toolPrimitives: [],
+    },
+    guidance: [
+      "- `data-analyst-guidance-v1`: apply Wiggs-specific query planning and response-formatting rules.",
+    ],
+  },
+  "compliance-helper-guidance-v1": {
+    resourceSlots: {},
+    skills: ["compliance-helper-review-rules", "compliance-helper-flag-patterns"],
+    grants: {
+      toolPrimitives: [],
+    },
+    guidance: [
+      "- `compliance-helper-guidance-v1`: apply compliance helper review and red-flag detection rules.",
+    ],
+  },
 } as const satisfies Record<string, CapabilityDefinition>;
 
 export type CapabilityCatalog = typeof capabilityCatalog;

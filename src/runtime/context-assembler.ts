@@ -2,7 +2,6 @@ import path from "node:path";
 import type { CompiledAgentCapabilities } from "../../agents/capability-compiler.js";
 import type { CapabilitySkillId } from "../../agents/contracts.js";
 import {
-  readMarkdownFiles,
   readOptionalFile,
   readRequiredMarkdownFile,
   resolvePathFromCwd,
@@ -17,7 +16,6 @@ export type ContextAssemblerAgent = Readonly<{
   name: string;
   description: string | null;
   capabilityProfile: CompiledAgentCapabilities;
-  skillsPath: string | null;
   memoryPath: string | null;
 }>;
 
@@ -97,7 +95,6 @@ function buildSystemPrompt(input: {
   sharedSkillDocs: LoadedDocument[];
   resourceDocs: LoadedDocument[];
   resourceContextDocs: LoadedDocument[];
-  agentSkills: LoadedDocument[];
   memoryContent: string | null;
   capabilityGuidance: readonly string[];
   resourceGuidance: readonly string[];
@@ -148,11 +145,6 @@ function buildSystemPrompt(input: {
     ),
     "",
     formatLoadedDocuments(
-      "Agent-local skills loaded this turn:",
-      input.agentSkills,
-    ),
-    "",
-    formatLoadedDocuments(
       resourceContextHeading,
       input.resourceContextDocs,
     ),
@@ -167,20 +159,16 @@ export async function assembleTurnContext(
     input.agent.capabilityProfile,
   );
 
-  const agentSkillsDir = input.agent.skillsPath
-    ? resolvePathFromCwd(input.cwd, input.agent.skillsPath)
-    : null;
   const agentMemoryFilePath = input.agent.memoryPath
     ? path.join(resolvePathFromCwd(input.cwd, input.agent.memoryPath), "MEMORY.md")
     : null;
 
-  const [sharedSkillDocs, agentSkills, resourceContributions] = await Promise.all([
+  const [sharedSkillDocs, resourceContributions] = await Promise.all([
     loadDeclaredSharedSkillDocs({
       cwd: input.cwd,
       sharedRoot: input.sharedRoot,
       skillIds: input.agent.capabilityProfile.requiredSkillIds,
     }),
-    agentSkillsDir ? readMarkdownFiles(agentSkillsDir) : Promise.resolve([]),
     loadResourceContributions({
       resources: input.agent.capabilityProfile.requiredResources,
       cwd: input.cwd,
@@ -220,7 +208,6 @@ export async function assembleTurnContext(
     sharedSkillDocs,
     resourceDocs,
     resourceContextDocs,
-    agentSkills,
     memoryContent,
     capabilityGuidance,
     resourceGuidance,

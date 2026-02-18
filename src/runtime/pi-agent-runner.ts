@@ -33,7 +33,6 @@ type AgentRuntimeRecord = {
   name: string;
   description: string | null;
   model: string;
-  skills_path: string | null;
   memory_path: string | null;
   compiledCapabilities: CompiledAgentCapabilities;
 };
@@ -188,7 +187,6 @@ async function loadAgentRuntimeRecord(
     .selectFrom("agents")
     .select([
       "id",
-      "skills_path",
       "memory_path",
     ])
     .where("id", "=", agentId)
@@ -206,7 +204,6 @@ async function loadAgentRuntimeRecord(
     name: declaration.name,
     description: declaration.description,
     model: declaration.model,
-    skills_path: row.skills_path,
     memory_path: row.memory_path,
     compiledCapabilities: declaration.compiledCapabilities,
   };
@@ -218,7 +215,6 @@ function toAssemblerAgent(record: AgentRuntimeRecord): ContextAssemblerAgent {
     name: record.name,
     description: record.description,
     capabilityProfile: record.compiledCapabilities,
-    skillsPath: asStringOrNull(record.skills_path),
     memoryPath: asStringOrNull(record.memory_path),
   };
 }

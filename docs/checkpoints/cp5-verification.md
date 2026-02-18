@@ -17,7 +17,7 @@ Validate CP5 contracts for:
 | Run logging lifecycle | Started + completed/failed rows persist in `gravity.runs` | `npm run verify:cp5` | Pass/fail summary from script |
 | Trigger coverage | Slash (`slash_command`), non-slash (`app_mention`, `thread_reply`), proactive (`cron`, `heartbeat`) persist dimensions | `npm run verify:cp5` | Script asserts `trigger_kind` + `entrypoint` fields |
 | Failure path | Failed runs persist `status=failed`, `error_message`, `completed_at`, null `result_summary` | `npm run verify:cp5` | Script assertions |
-| Store conventions | `store/shared/*` and `store/agents/*` paths exist; no nested `store/.git` | `npm run verify:cp5` and `npm run test:invariants` | Script + invariant checks |
+| Store conventions | `store/shared/*` + agent memory paths exist, agent-local skills stay migrated into shared namespace, and no nested `store/.git` | `npm run verify:cp5` and `npm run test:invariants` | Script + invariant checks |
 | Query skill contract | Agent can introspect config/runs/skill history with read-only SQL | `cat store/shared/skills/query-gravity.md` | Required query set present |
 | Rollback skill contract | File-scoped git rollback procedure is explicit and non-destructive | `cat store/shared/skills/rollback.md` | Required procedure/rules present |
 
@@ -32,9 +32,9 @@ Validate CP5 contracts for:
   - `message / thread_reply / completed = 6`
   - `message / thread_reply / failed = 2`
 - Rollback validation cycle:
-  - file: `store/agents/compliance-helper/skills/review-rules.md`
-  - pre-edit hash: `194f7b6f1f44d04a8101437ce7ab87f4bb97f224`
-  - post-restore hash: `194f7b6f1f44d04a8101437ce7ab87f4bb97f224`
+  - file: `store/shared/skills/compliance-helper-review-rules.md`
+  - pre-edit hash: `fb340f37d530c17259a5a001fbcf487ce779336b`
+  - post-restore hash: `fb340f37d530c17259a5a001fbcf487ce779336b`
   - result: `rollback_cycle=ok`
 
 ## Optional Live Sampling
