@@ -21,10 +21,15 @@ CP3 will not depend on `@mariozechner/pi-mom` directly. We will copy/adapt imple
 - [x] Add runtime dependencies aligned with the `pi-mom` implementation (`pi-*`, Slack SDKs, supporting libs) to `package.json` with pinned versions.
 - [x] Copy/adapt minimal Slack loop pieces from `pi-mom` into `src/` (transport + queueing only).
 - [x] Wire Slack Socket Mode connection and event ingestion (`app_mention` + `message` with channel-scoped queueing).
-- [ ] Implement `channel_id -> agentId` lookup from Postgres (`gravity.agents`).
+- [x] Implement `channel_id -> agentId` lookup from Postgres (`gravity.agents`).
 - [ ] Add run lifecycle-backed inserts/updates for `gravity.runs`.
 - [ ] Reply with a basic echo response to validate end-to-end routing.
 - [x] Update checkpoint status and architecture docs if boundaries change.
+
+## Deferred Follow-Up (Post-CP3)
+- [ ] Add slash-command entrypoint for Wiggs (`/wiggs`) on the single router bot.
+- [ ] Handle Socket Mode `slash_commands` payloads and route `/wiggs <query>` into the same run lifecycle path.
+- [ ] Keep mention-based routing as fallback while slash commands roll out.
 
 ## Risks
 - Slack app credentials and Socket Mode setup may be incomplete.

@@ -1,5 +1,11 @@
 import process from "node:process";
+import type { Kysely } from "kysely";
+import {
+  AgentRegistry,
+  type RoutedInboundSlackMessage,
+} from "./runtime/agent-registry.js";
 import { loadConfig } from "./runtime/config.js";
+import { createDb, destroyDb, type GravityDatabase } from "./runtime/db.js";
 import {
   createConsoleRunLifecycleLogger,
   createRunContext,
@@ -22,6 +28,7 @@ const bootstrapRunContext = createRunContext({
 
 let livenessTicker: NodeJS.Timeout | null = null;
 let slackTransport: SlackTransport | null = null;
+let runtimeDb: Kysely<GravityDatabase> | null = null;
 let isShuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
@@ -40,6 +47,11 @@ async function shutdown(signal: string): Promise<void> {
     slackTransport = null;
   }
 
+  if (runtimeDb !== null) {
+    await destroyDb(runtimeDb);
+    runtimeDb = null;
+  }
+
   console.log(`[gravity] received ${signal}; shutdown complete`);
   process.exit(0);
 }
@@ -51,8 +63,24 @@ process.on("SIGTERM", () => {
   void shutdown("SIGTERM");
 });
 
-function logInboundSlackMessage(message: InboundSlackMessage): void {
-  console.log(`[gravity] slack inbound ${JSON.stringify(message)}`);
+function logRoutedSlackMessage(message: RoutedInboundSlackMessage): void {
+  console.log(`[gravity] slack routed ${JSON.stringify(message)}`);
+}
+
+function createSlackInboundMessageHandler(
+  agentRegistry: AgentRegistry,
+): (message: InboundSlackMessage) => void {
+  return (message) => {
+    const routedMessage = agentRegistry.resolveInboundMessage(message);
+    if (!routedMessage) {
+      console.log(
+        `[gravity] slack inbound ignored (unmapped channelId=${message.channelId} sourceEventId=${message.sourceEventId})`,
+      );
+      return;
+    }
+
+    logRoutedSlackMessage(routedMessage);
+  };
 }
 
 try {
@@ -65,11 +93,15 @@ try {
     console.log(`[gravity] database=${config.databaseUrl}`);
     console.log("[gravity] runtime scaffold active");
 
+    runtimeDb = createDb(config.databaseUrl);
+    const agentRegistry = new AgentRegistry(runtimeDb);
+    await agentRegistry.refresh();
+
     if (config.slackAppToken && config.slackBotToken) {
       slackTransport = new SlackTransport({
         appToken: config.slackAppToken,
         botToken: config.slackBotToken,
-        onInboundMessage: logInboundSlackMessage,
+        onInboundMessage: createSlackInboundMessageHandler(agentRegistry),
       });
       await slackTransport.start();
     } else {
@@ -84,6 +116,10 @@ try {
     }, config.livenessIntervalSeconds * 1000);
   });
 } catch (error) {
+  if (runtimeDb !== null) {
+    await destroyDb(runtimeDb);
+    runtimeDb = null;
+  }
   const message =
     error instanceof Error ? error.message : "Unknown bootstrap failure";
   console.error(`[gravity] bootstrap failed: ${message}`);
