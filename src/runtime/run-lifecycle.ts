@@ -52,6 +52,16 @@ export function createConsoleRunLifecycleLogger(
   };
 }
 
+export function composeRunLifecycleLoggers(
+  loggers: ReadonlyArray<RunLifecycleLogger>,
+): RunLifecycleLogger {
+  return async (event) => {
+    for (const logger of loggers) {
+      await logger(event);
+    }
+  };
+}
+
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;

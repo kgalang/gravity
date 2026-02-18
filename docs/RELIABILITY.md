@@ -13,5 +13,5 @@
 4. Deterministic cancellation and timeout semantics.
 
 ## Immediate Next Work
-1. Route run lifecycle events into persistent `gravity.runs` writes during CP3/CP5 integration.
-2. Add startup reconciliation checks before proactive behavior (CP10).
+1. Add startup reconciliation checks before proactive behavior (CP10).
+2. Harden slash-command idempotency handling around repeated source event delivery.

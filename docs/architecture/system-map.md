@@ -23,6 +23,7 @@
 
 ## Integration Targets
 - Slack Socket Mode routing from slash commands (`/wiggs`, `/compliance`) to stable `agentId` values on the single router bot.
+- Routed slash command acknowledgements should return `response_type: in_channel` for visible channel-level echo routing feedback; unmapped slash commands should acknowledge with `response_type: ephemeral`.
 - Non-slash triggers (`app_mention`, `message`) remain disabled until CP6/CP7 session and memory behavior is implemented and tested.
 - Claude API loop with compaction and tool-result truncation from `mvp_requirements.md`.
 - DuckDB connector at `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb` for Wiggs.

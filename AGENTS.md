@@ -4,7 +4,7 @@ This repository follows a harness-oriented workflow: docs first, clear interface
 
 ## Fast Map
 - Canonical docs index: [docs/README.md](docs/README.md)
-- Current execution plan: [docs/plans/active/2026-02-17-cp3-slack-routing.md](docs/plans/active/2026-02-17-cp3-slack-routing.md)
+- Current execution plan: [docs/plans/active/2026-02-18-cp4-wiggs-e2e.md](docs/plans/active/2026-02-18-cp4-wiggs-e2e.md)
 - Checkpoint board: [docs/checkpoints/mvp-status.md](docs/checkpoints/mvp-status.md)
 - System map: [docs/architecture/system-map.md](docs/architecture/system-map.md)
 - Interface boundaries: [docs/architecture/interfaces.md](docs/architecture/interfaces.md)
