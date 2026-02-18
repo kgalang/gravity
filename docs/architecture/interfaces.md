@@ -10,12 +10,12 @@ Keep moving parts explicit and replaceable.
 - `SkillLoader`: loads shared + agent-specific skills from `store/` each turn (no caching).
 - `MemoryStore`: loads/writes `MEMORY.md` per agent.
 - `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
-- `RunLogStore`: writes run lifecycle records to `gravity.runs`.
+- `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
 - `ToolDispatcher`: single dispatch seam for all tool execution (host now, sandbox later).
 - `Scheduler`: heartbeat and cron execution with target session behavior.
 
 ## Non-Goals for Current Bootstrap
-- No Slack reply behavior yet (slash command routing is active for CP3).
+- No rich Slack response behavior yet beyond deterministic slash echo replies (`in_channel` for routed commands, `ephemeral` for unmapped commands).
 - No non-slash agent triggering from `app_mention`/`message` events in the runtime path.
 - No channel-based `channel_id -> agentId` routing fallback in the runtime path.
 - No live Claude tool loop yet.
@@ -28,6 +28,8 @@ Keep moving parts explicit and replaceable.
 - `SlackTransport` rollback path: disable live Slack connection in `src/index.ts` and fall back to no-op inbound logging while preserving normalized inbound event contracts.
 - `RunLifecycleLogger` owner: platform runtime layer.
 - `RunLifecycleLogger` rollback path: revert runtime entrypoints to direct `console.log` messages while preserving stable ID fields in log lines.
+- `RunLogStore` owner: platform runtime layer.
+- `RunLogStore` rollback path: keep lifecycle log lines but disable `gravity.runs` writes from `src/index.ts` while retaining the DB schema contract.
 
 ## Stability Requirement
 Do not change interface boundaries without updating this file and `docs/checkpoints/mvp-status.md` in the same change.

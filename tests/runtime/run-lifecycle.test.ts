@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  composeRunLifecycleLoggers,
   createRunContext,
   type RunLifecycleEvent,
   withRunLifecycle,
@@ -36,6 +37,33 @@ describe("createRunContext", () => {
 });
 
 describe("withRunLifecycle", () => {
+  it("composes multiple lifecycle loggers in order", async () => {
+    const events: string[] = [];
+    const context = createRunContext({
+      runId: "run-composed-loggers",
+      agentId: "system-bootstrap",
+      sessionKey: "system-bootstrap:main",
+      source: "system",
+    });
+    const logger = composeRunLifecycleLoggers([
+      async (event) => {
+        events.push(`one:${event.stage}`);
+      },
+      async (event) => {
+        events.push(`two:${event.stage}`);
+      },
+    ]);
+
+    await withRunLifecycle(context, logger, async () => undefined);
+
+    expect(events).toEqual([
+      "one:started",
+      "two:started",
+      "one:completed",
+      "two:completed",
+    ]);
+  });
+
   it("emits started and completed events on success", async () => {
     const events: RunLifecycleEvent[] = [];
     const context = createRunContext({

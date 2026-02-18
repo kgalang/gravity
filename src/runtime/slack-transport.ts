@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { SocketModeClient } from "@slack/socket-mode";
 import { WebClient } from "@slack/web-api";
+import { normalizeSlashCommand } from "./slash-command-router.js";
 
 export type SlackSurface = "app_mention" | "message";
 export type SlackCommandSurface = "slash_command";
 export type SlackSlashCommandAckResponse = {
-  response_type: "in_channel";
+  response_type: "in_channel" | "ephemeral";
   text: string;
 };
 
@@ -30,14 +31,18 @@ export type InboundSlackSlashCommand = {
   triggerId: string | null;
 };
 
-type Acknowledge = (
+type Acknowledge = () => Promise<void> | void;
+type SlashCommandAcknowledge = (
   response?: SlackSlashCommandAckResponse,
 ) => Promise<void> | void;
 type QueuedWork = () => Promise<void>;
 
-type SocketEnvelope<EventPayload> = {
+type SocketEnvelope<
+  EventPayload,
+  AckType = Acknowledge,
+> = {
   event?: EventPayload;
-  ack?: Acknowledge;
+  ack?: AckType;
   body?: unknown;
   envelope_id?: string;
 };
@@ -101,7 +106,9 @@ export type SocketModeClientLike = {
     handler:
       | ((payload: SocketEnvelope<SlackAppMentionEvent>) => void | Promise<void>)
       | ((payload: SocketEnvelope<SlackMessageEvent>) => void | Promise<void>)
-      | ((payload: SocketEnvelope<SlackSlashCommandBody>) => void | Promise<void>),
+      | ((
+          payload: SocketEnvelope<SlackSlashCommandBody, SlashCommandAcknowledge>,
+        ) => void | Promise<void>),
   ): void;
   start(): Promise<void>;
   disconnect?: () => Promise<void>;
@@ -194,10 +201,6 @@ export function buildSourceEventId(input: {
   }
 
   return `${input.channelId}:${input.messageTs}:${input.userId}`;
-}
-
-function normalizeSlashCommandToken(command: string): string {
-  return command.trim().toLowerCase();
 }
 
 function buildSlashFallbackSourceEventId(input: {
@@ -309,7 +312,7 @@ export function normalizeSlashCommandBody(
     return null;
   }
 
-  const normalizedCommand = normalizeSlashCommandToken(body.command);
+  const normalizedCommand = normalizeSlashCommand(body.command);
   if (normalizedCommand.length === 0) {
     return null;
   }
@@ -483,10 +486,12 @@ export class SlackTransport {
 
     this.socketClient.on(
       "slash_commands",
-      async (payload: SocketEnvelope<SlackSlashCommandBody>) => {
+      async (
+        payload: SocketEnvelope<SlackSlashCommandBody, SlashCommandAcknowledge>,
+      ) => {
         const body = extractSocketEvent<SlackSlashCommandBody>(payload);
         if (!body) {
-          await this.safeAck(payload.ack);
+          await this.safeSlashCommandAck(payload.ack);
           return;
         }
 
@@ -494,7 +499,7 @@ export class SlackTransport {
           envelopeId: payload.envelope_id,
         });
         if (!command) {
-          await this.safeAck(payload.ack);
+          await this.safeSlashCommandAck(payload.ack);
           return;
         }
 
@@ -509,7 +514,7 @@ export class SlackTransport {
           }
         }
 
-        await this.safeAck(payload.ack, ackResponse);
+        await this.safeSlashCommandAck(payload.ack, ackResponse);
 
         if (!this.onInboundSlashCommand) {
           return;
@@ -562,6 +567,22 @@ export class SlackTransport {
 
   private async safeAck(
     ack: Acknowledge | undefined,
+  ): Promise<void> {
+    if (!ack) {
+      return;
+    }
+
+    try {
+      await ack();
+    } catch (error) {
+      this.log(
+        `[gravity] slack ack failed: ${normalizeErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private async safeSlashCommandAck(
+    ack: SlashCommandAcknowledge | undefined,
     response?: SlackSlashCommandAckResponse,
   ): Promise<void> {
     if (!ack) {
