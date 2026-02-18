@@ -1,5 +1,6 @@
 import { Cron } from "croner";
 import type { Kysely } from "kysely";
+import { parseAgentConfig } from "./agent-config.js";
 import { type GravityDatabase, gravitySchema } from "./db.js";
 import {
   resolveProactiveTriggers,
@@ -38,10 +39,6 @@ type ScheduledHandle = {
   stop: () => void;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 async function loadActiveAgentProactiveRows(
   db: Kysely<GravityDatabase>,
 ): Promise<ActiveAgentProactiveRow[]> {
@@ -54,7 +51,10 @@ async function loadActiveAgentProactiveRows(
   return rows.map((row) => ({
     id: row.id,
     channel_id: row.channel_id,
-    config: isRecord(row.config) ? row.config : {},
+    config: parseAgentConfig(row.config, {
+      warn: console.warn,
+      context: `agentId=${row.id}`,
+    }),
   }));
 }
 

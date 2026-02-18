@@ -177,4 +177,40 @@ describe("resolveProactiveTriggers", () => {
 
     expect(triggers).toEqual([]);
   });
+
+  it("ignores malformed trigger entries without throwing", () => {
+    const triggers = resolveProactiveTriggers([
+      {
+        id: "data-analyst",
+        channel_id: "C123",
+        config: {
+          proactiveTriggers: [
+            null,
+            {
+              id: "hourly",
+              kind: "heartbeat",
+              intervalSeconds: 900,
+              prompt: "Run heartbeat check",
+            },
+          ],
+        } as unknown as ActiveAgentProactiveRow["config"],
+      } satisfies ActiveAgentProactiveRow,
+    ]);
+
+    expect(triggers).toEqual([
+      {
+        agentId: "data-analyst",
+        triggerId: "hourly",
+        kind: "heartbeat",
+        intervalSeconds: 900,
+        prompt: "Run heartbeat check",
+        sessionMode: "isolated",
+        delivery: {
+          surface: "slack",
+          mode: "channel_thread",
+          channelId: "C123",
+        },
+      },
+    ]);
+  });
 });

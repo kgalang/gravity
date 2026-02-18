@@ -1,5 +1,6 @@
 import process from "node:process";
 import { loadConfig } from "./runtime/config.js";
+import { parseAgentConfig } from "./runtime/agent-config.js";
 import { createDb, destroyDb, gravitySchema } from "./runtime/db.js";
 import {
   createEventIdempotencyGuard,
@@ -377,10 +378,10 @@ async function loadActiveAgentIngressRows(
   return rows.map((row) => ({
     id: row.id,
     channel_id: row.channel_id,
-    config:
-      typeof row.config === "object" && row.config !== null
-        ? (row.config as Record<string, unknown>)
-        : {},
+    config: parseAgentConfig(row.config, {
+      warn: console.warn,
+      context: `agentId=${row.id}`,
+    }),
   }));
 }
 

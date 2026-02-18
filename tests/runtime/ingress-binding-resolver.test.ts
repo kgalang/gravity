@@ -209,4 +209,32 @@ describe("resolveMessageIngress", () => {
 
     expect(resolveMessageIngress(message, agents)).toBeNull();
   });
+
+  it("ignores malformed binding entries without throwing", () => {
+    const message = createBaseMessage();
+    const agents: ActiveAgentIngressRow[] = [
+      createAgent({
+        config: {
+          ingressBindings: [
+            null,
+            {
+              kind: "message",
+              surface: "slack",
+              entrypoint: "app_mention",
+              sessionMode: "thread",
+              enabled: true,
+            },
+          ],
+        } as unknown as ActiveAgentIngressRow["config"],
+      }),
+    ];
+
+    expect(() => resolveMessageIngress(message, agents)).not.toThrow();
+    expect(resolveMessageIngress(message, agents)).toEqual({
+      agentId: "data-analyst",
+      entrypoint: "app_mention",
+      sessionMode: "thread",
+      route: "binding",
+    });
+  });
 });

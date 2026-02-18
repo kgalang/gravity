@@ -1,10 +1,15 @@
+import type {
+  AgentConfig,
+  AgentDeliveryTarget,
+  AgentProactiveTrigger,
+} from "./agent-config.js";
 import type { SessionMode } from "./session-catalog.js";
 import type { ProactiveTriggerKind } from "./trigger-normalizer.js";
 
 export type ActiveAgentProactiveRow = {
   id: string;
   channel_id: string | null;
-  config: Record<string, unknown>;
+  config: AgentConfig;
 };
 
 export type ProactiveDeliveryTarget =
@@ -38,12 +43,8 @@ export type ResolvedProactiveTrigger =
       intervalSeconds: number;
     });
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function asString(value: unknown): string | null {
-  if (typeof value !== "string") {
+function normalizeNonEmptyString(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
     return null;
   }
 
@@ -51,48 +52,13 @@ function asString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function asBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
-function asSessionMode(value: unknown): SessionMode | null {
-  if (value === "thread" || value === "main" || value === "isolated") {
-    return value;
-  }
-
-  return null;
-}
-
-function asKind(value: unknown): ProactiveTriggerKind | null {
-  if (value === "cron" || value === "heartbeat") {
-    return value;
-  }
-
-  return null;
-}
-
-function asIntervalSeconds(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function parseDelivery(raw: AgentDeliveryTarget | undefined): ProactiveDeliveryTarget | null {
+  if (!raw) {
     return null;
   }
 
-  const rounded = Math.floor(value);
-  return rounded >= 5 ? rounded : null;
-}
-
-function parseDelivery(raw: unknown): ProactiveDeliveryTarget | null {
-  if (!isRecord(raw)) {
-    return null;
-  }
-
-  const surface = asString(raw.surface);
-  if (surface !== "slack") {
-    return null;
-  }
-
-  const mode = asString(raw.mode);
-  if (mode === "channel_thread") {
-    const channelId = asString(raw.channelId);
+  if (raw.mode === "channel_thread") {
+    const channelId = normalizeNonEmptyString(raw.channelId);
     if (!channelId) {
       return null;
     }
@@ -104,25 +70,21 @@ function parseDelivery(raw: unknown): ProactiveDeliveryTarget | null {
     };
   }
 
-  if (mode === "dm") {
-    const userId = asString(raw.userId);
-    if (!userId) {
-      return null;
-    }
-
-    return {
-      surface: "slack",
-      mode: "dm",
-      userId,
-    };
+  const userId = normalizeNonEmptyString(raw.userId);
+  if (!userId) {
+    return null;
   }
 
-  return null;
+  return {
+    surface: "slack",
+    mode: "dm",
+    userId,
+  };
 }
 
 function resolveDeliveryTarget(input: {
-  rawTrigger: Record<string, unknown>;
-  rawDefaults: unknown;
+  rawTrigger: AgentProactiveTrigger;
+  rawDefaults: AgentDeliveryTarget | undefined;
   fallbackChannelId: string | null;
 }): ProactiveDeliveryTarget | null {
   const explicit = parseDelivery(input.rawTrigger.delivery);
@@ -135,11 +97,12 @@ function resolveDeliveryTarget(input: {
     return defaults;
   }
 
-  if (input.fallbackChannelId) {
+  const fallbackChannelId = normalizeNonEmptyString(input.fallbackChannelId);
+  if (fallbackChannelId) {
     return {
       surface: "slack",
       mode: "channel_thread",
-      channelId: input.fallbackChannelId,
+      channelId: fallbackChannelId,
     };
   }
 
@@ -147,10 +110,10 @@ function resolveDeliveryTarget(input: {
 }
 
 function normalizeSessionMode(
-  rawSessionMode: unknown,
+  rawSessionMode: SessionMode | undefined,
   delivery: ProactiveDeliveryTarget,
 ): SessionMode {
-  const requested = asSessionMode(rawSessionMode) ?? "isolated";
+  const requested = rawSessionMode ?? "isolated";
   if (requested === "thread" && delivery.mode === "dm") {
     return "main";
   }
@@ -164,25 +127,20 @@ export function resolveProactiveTriggers(
   const resolved: ResolvedProactiveTrigger[] = [];
 
   for (const agent of agents) {
-    const rawTriggers = agent.config.proactiveTriggers;
-    if (!Array.isArray(rawTriggers)) {
-      continue;
-    }
+    const rawTriggers = agent.config.proactiveTriggers ?? [];
 
     for (const rawTrigger of rawTriggers) {
-      if (!isRecord(rawTrigger)) {
+      if (!rawTrigger || typeof rawTrigger !== "object") {
         continue;
       }
 
-      const enabled = asBoolean(rawTrigger.enabled) ?? true;
-      if (!enabled) {
+      if (rawTrigger.enabled === false) {
         continue;
       }
 
-      const triggerId = asString(rawTrigger.id);
-      const kind = asKind(rawTrigger.kind);
-      const prompt = asString(rawTrigger.prompt);
-      if (!triggerId || !kind || !prompt) {
+      const triggerId = normalizeNonEmptyString(rawTrigger.id);
+      const prompt = normalizeNonEmptyString(rawTrigger.prompt);
+      if (!triggerId || !prompt) {
         continue;
       }
 
@@ -197,8 +155,8 @@ export function resolveProactiveTriggers(
 
       const sessionMode = normalizeSessionMode(rawTrigger.sessionMode, delivery);
 
-      if (kind === "cron") {
-        const schedule = asString(rawTrigger.schedule);
+      if (rawTrigger.kind === "cron") {
+        const schedule = normalizeNonEmptyString(rawTrigger.schedule);
         if (!schedule) {
           continue;
         }
@@ -206,7 +164,7 @@ export function resolveProactiveTriggers(
         resolved.push({
           agentId: agent.id,
           triggerId,
-          kind,
+          kind: "cron",
           schedule,
           prompt,
           sessionMode,
@@ -215,15 +173,15 @@ export function resolveProactiveTriggers(
         continue;
       }
 
-      const intervalSeconds = asIntervalSeconds(rawTrigger.intervalSeconds);
-      if (intervalSeconds === null) {
+      const intervalSeconds = Math.floor(rawTrigger.intervalSeconds);
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 5) {
         continue;
       }
 
       resolved.push({
         agentId: agent.id,
         triggerId,
-        kind,
+        kind: "heartbeat",
         intervalSeconds,
         prompt,
         sessionMode,

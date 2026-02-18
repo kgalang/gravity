@@ -1,3 +1,7 @@
+import type {
+  AgentConfig,
+  AgentIngressBindingMatch,
+} from "./agent-config.js";
 import type { InboundSlackMessage } from "./slack-transport.js";
 import type { SessionMode } from "./session-catalog.js";
 
@@ -6,7 +10,7 @@ export type MessageEntrypoint = "app_mention" | "thread_reply" | "direct_message
 export type ActiveAgentIngressRow = {
   id: string;
   channel_id: string | null;
-  config: Record<string, unknown>;
+  config: AgentConfig;
 };
 
 export type ResolvedMessageIngress = {
@@ -26,84 +30,44 @@ type IngressBinding = {
   entrypoint: MessageEntrypoint;
   enabled: boolean;
   sessionMode: SessionMode;
-  match: Record<string, unknown>;
+  match: AgentIngressBindingMatch;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function asString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function asBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
-function asSessionMode(value: unknown): SessionMode | null {
-  if (value === "thread" || value === "main" || value === "isolated") {
-    return value;
-  }
-
-  return null;
-}
-
-function asMessageEntrypoint(value: unknown): MessageEntrypoint | null {
-  if (
-    value === "app_mention" ||
-    value === "thread_reply" ||
-    value === "direct_message"
-  ) {
-    return value;
-  }
-
-  return null;
-}
 
 function defaultSessionModeForEntrypoint(entrypoint: MessageEntrypoint): SessionMode {
   return entrypoint === "direct_message" ? "main" : "thread";
 }
 
-function parseIngressBindings(config: Record<string, unknown>): IngressBinding[] {
-  const rawBindings = config.ingressBindings;
-  if (!Array.isArray(rawBindings)) {
-    return [];
-  }
-
+function parseIngressBindings(config: AgentConfig): IngressBinding[] {
   const bindings: IngressBinding[] = [];
 
-  for (const raw of rawBindings) {
-    if (!isRecord(raw)) {
+  for (const rawBinding of config.ingressBindings ?? []) {
+    if (!rawBinding || typeof rawBinding !== "object") {
       continue;
     }
 
-    const kind = asString(raw.kind);
-    const surface = asString(raw.surface);
-    const entrypoint = asMessageEntrypoint(raw.entrypoint);
-    if (kind !== "message" || surface !== "slack" || !entrypoint) {
+    if (
+      rawBinding.kind !== "message" ||
+      rawBinding.surface !== "slack" ||
+      rawBinding.entrypoint === "slash_command"
+    ) {
       continue;
     }
 
-    const enabled = asBoolean(raw.enabled) ?? true;
+    const enabled = rawBinding.enabled ?? true;
     if (!enabled) {
       continue;
     }
 
+    const entrypoint = rawBinding.entrypoint;
     bindings.push({
       kind: "message",
       surface: "slack",
       entrypoint,
       enabled,
       sessionMode:
-        asSessionMode(raw.sessionMode) ??
+        rawBinding.sessionMode ??
         defaultSessionModeForEntrypoint(entrypoint),
-      match: isRecord(raw.match) ? raw.match : {},
+      match: rawBinding.match ?? {},
     });
   }
 
@@ -139,25 +103,25 @@ function bindingMatchesMessage(
     return false;
   }
 
-  const matchChannelId = asString(binding.match.channelId);
+  const matchChannelId = binding.match.channelId;
   if (matchChannelId && matchChannelId !== message.channelId) {
     return false;
   }
 
-  const matchUserId = asString(binding.match.userId);
+  const matchUserId = binding.match.userId;
   if (matchUserId && matchUserId !== message.userId) {
     return false;
   }
 
-  const matchIsDirectMessage = asBoolean(binding.match.isDirectMessage);
+  const matchIsDirectMessage = binding.match.isDirectMessage;
   if (
-    matchIsDirectMessage !== null &&
+    matchIsDirectMessage !== undefined &&
     matchIsDirectMessage !== message.isDirectMessage
   ) {
     return false;
   }
 
-  const matchThreadOwnedByAgent = asBoolean(binding.match.threadOwnedByAgent);
+  const matchThreadOwnedByAgent = binding.match.threadOwnedByAgent;
   if (matchThreadOwnedByAgent === true && entrypoint !== "thread_reply") {
     return false;
   }
