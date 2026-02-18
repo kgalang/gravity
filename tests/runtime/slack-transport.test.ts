@@ -63,6 +63,7 @@ class FakeWebClient implements WebClientLike {
     };
     this.conversations = {
       open: vi.fn(async ({ users }) => ({ channel: { id: `D-${users}` } })),
+      replies: vi.fn(async () => ({ messages: [] })),
     };
   }
 }
@@ -479,5 +480,122 @@ describe("SlackTransport", () => {
     expect(second).toEqual({ channelId: "D-U123", ts: "reply-ts" });
     expect(web.conversations.open).toHaveBeenCalledTimes(1);
     expect(web.chat.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetches thread history for startup backfill", async () => {
+    const socket = new FakeSocketModeClient();
+    const web = new FakeWebClient("UBOT");
+    web.conversations.replies = vi.fn(async () => ({
+      messages: [
+        {
+          user: "U111",
+          text: "hello <@UBOT>",
+          ts: "1700000000.100",
+        },
+        {
+          user: "UBOT",
+          text: "response",
+          ts: "1700000000.200",
+          subtype: "bot_message",
+        },
+        {
+          bot_id: "B111",
+          text: "response two",
+          ts: "1700000000.220",
+          subtype: "bot_message",
+        },
+        {
+          user: "UBOT",
+          text: "ignore me",
+          ts: "1700000000.250",
+          subtype: "message_changed",
+        },
+        {
+          user: "U222",
+          text: "",
+          ts: "1700000000.300",
+        },
+      ],
+      response_metadata: {},
+    }));
+
+    const transport = new SlackTransport({
+      appToken: "xapp-test",
+      botToken: "xoxb-test",
+      socketClient: socket,
+      webClient: web,
+      log: () => {
+        // no-op for tests
+      },
+    });
+
+    await transport.start();
+
+    const messages = await transport.fetchThreadMessages({
+      channelId: "C123",
+      threadTs: "1700000000.000",
+      oldestMessageTs: "1700000000.050",
+    });
+
+    expect(messages).toEqual([
+      {
+        sourceEventId: "C123:1700000000.100:U111",
+        messageTs: "1700000000.100",
+        userId: "U111",
+        text: "hello",
+        isBot: false,
+      },
+      {
+        sourceEventId: "C123:1700000000.200:UBOT",
+        messageTs: "1700000000.200",
+        userId: "UBOT",
+        text: "response",
+        isBot: true,
+      },
+      {
+        sourceEventId: "C123:1700000000.220:UBOT",
+        messageTs: "1700000000.220",
+        userId: "UBOT",
+        text: "response two",
+        isBot: true,
+      },
+    ]);
+  });
+
+  it("warns when thread history is truncated at max pages", async () => {
+    const socket = new FakeSocketModeClient();
+    const web = new FakeWebClient("UBOT");
+    const log = vi.fn();
+    web.conversations.replies = vi.fn(async ({ cursor }) => ({
+      messages: [
+        {
+          user: "U111",
+          text: `msg-${cursor ?? "first"}`,
+          ts: `1700000000.${cursor ? "200" : "100"}`,
+        },
+      ],
+      response_metadata: { next_cursor: "next" },
+    }));
+
+    const transport = new SlackTransport({
+      appToken: "xapp-test",
+      botToken: "xoxb-test",
+      socketClient: socket,
+      webClient: web,
+      log,
+    });
+
+    await transport.start();
+
+    const messages = await transport.fetchThreadMessages({
+      channelId: "C123",
+      threadTs: "1700000000.000",
+    });
+
+    expect(web.conversations.replies).toHaveBeenCalledTimes(4);
+    expect(messages).toHaveLength(4);
+    expect(log).toHaveBeenCalledWith(
+      "[gravity][warning] slack thread history backfill truncated after 4 page(s) (channelId=C123 threadTs=1700000000.000)",
+    );
   });
 });

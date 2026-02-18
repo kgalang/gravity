@@ -201,7 +201,7 @@ Required before declaring CP5.1 complete:
 6. Stable IDs (`agentId`, `sessionKey`, `runId`) are preserved end-to-end.
 
 CP6 note:
-- Session/memory scaffolding stays paused until CP5.1 parity exits green.
+- Session/memory scaffolding resumed after CP5.1 parity and is verified via `docs/checkpoints/cp6-verification.md`.
 
 ## Resolved Questions (Answered Now)
 

@@ -8,6 +8,7 @@ These docs are the canonical source of truth for architecture, execution status,
 - [Architecture system map](architecture/system-map.md)
 - [Architecture interfaces](architecture/interfaces.md)
 - [MVP checkpoint status](checkpoints/mvp-status.md)
+- [CP6 verification matrix](checkpoints/cp6-verification.md)
 - [CP10 verification matrix](checkpoints/cp10-verification.md)
 - [Active plan](plans/active/2026-02-18-cp6-sessions-memory-scaffolding.md)
 - [Planning model](PLANS.md)

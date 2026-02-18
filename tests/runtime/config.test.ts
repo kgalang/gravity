@@ -14,6 +14,28 @@ describe("loadConfig", () => {
       slackAppToken: null,
       slackBotToken: null,
       anthropicApiKey: null,
+      session: {
+        preRunSyncEnabled: true,
+        startupBackfillEnabled: true,
+        overflowRecoveryEnabled: true,
+        compaction: {
+          enabled: true,
+          reserveTokens: 16384,
+          keepRecentTokens: 20000,
+        },
+        retry: {
+          enabled: true,
+          maxRetries: 2,
+          baseDelayMs: 1000,
+          maxDelayMs: 5000,
+        },
+        idleEviction: {
+          enabled: true,
+          timeoutMs: 30 * 60 * 1000,
+          memoryHookEnabled: true,
+        },
+      },
+      runtimeWarnings: [],
     });
   });
 
@@ -23,16 +45,14 @@ describe("loadConfig", () => {
       GRAVITY_ENV: "test",
       [databaseUrlEnvVar]: "postgres://custom-url",
       GRAVITY_LIVENESS_INTERVAL_SECONDS: "45",
+      GRAVITY_SESSION_IDLE_EVICTION_MINUTES: "5",
     });
 
-    expect(config).toEqual({
-      env: "test",
-      databaseUrl: "postgres://custom-url",
-      livenessIntervalSeconds: 45,
-      slackAppToken: null,
-      slackBotToken: null,
-      anthropicApiKey: null,
-    });
+    expect(config.env).toBe("test");
+    expect(config.databaseUrl).toBe("postgres://custom-url");
+    expect(config.livenessIntervalSeconds).toBe(45);
+    expect(config.session.idleEviction.timeoutMs).toBe(5 * 60 * 1000);
+    expect(config.runtimeWarnings).toEqual([]);
   });
 
   it("normalizes optional Slack tokens", () => {
@@ -62,5 +82,22 @@ describe("loadConfig", () => {
         GRAVITY_LIVENESS_INTERVAL_SECONDS: "NaN",
       }),
     ).toThrow("GRAVITY_LIVENESS_INTERVAL_SECONDS must be a number >= 5");
+  });
+
+  it("fails closed with runtime warnings on invalid CP6 feature config", () => {
+    const config = loadConfig({
+      GRAVITY_SESSION_PRE_RUN_SYNC_ENABLED: "maybe",
+      GRAVITY_SESSION_COMPACTION_RESERVE_TOKENS: "not-a-number",
+      GRAVITY_SESSION_RETRY_MAX_DELAY_MS: "50",
+      GRAVITY_SESSION_IDLE_EVICTION_MINUTES: "0",
+      GRAVITY_SESSION_MEMORY_HOOK_ENABLED: "true",
+    });
+
+    expect(config.session.preRunSyncEnabled).toBe(false);
+    expect(config.session.compaction.enabled).toBe(false);
+    expect(config.session.retry.enabled).toBe(false);
+    expect(config.session.idleEviction.enabled).toBe(false);
+    expect(config.session.idleEviction.memoryHookEnabled).toBe(false);
+    expect(config.runtimeWarnings.length).toBeGreaterThan(0);
   });
 });

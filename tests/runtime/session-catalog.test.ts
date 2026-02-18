@@ -19,9 +19,17 @@ type CapturedRecord = {
 
 class FakeSessionCatalogRepository implements SessionCatalogRepository {
   readonly records: CapturedRecord[] = [];
+  readonly closeRecords: Array<{ sessionKey: string; closedAt: Date }> = [];
 
   async upsertSession(record: CapturedRecord): Promise<void> {
     this.records.push(record);
+  }
+
+  async closeSession(input: {
+    sessionKey: string;
+    closedAt: Date;
+  }): Promise<void> {
+    this.closeRecords.push(input);
   }
 }
 
@@ -79,5 +87,18 @@ describe("createSessionCatalog", () => {
         openedByTrigger: "message",
       }),
     ).rejects.toThrow("Session catalog agentId must be non-empty");
+  });
+
+  it("closes sessions with normalized session keys", async () => {
+    const repository = new FakeSessionCatalogRepository();
+    const catalog = createSessionCatalog(repository);
+
+    await catalog.closeSession({
+      sessionKey: " data-analyst:abc123 ",
+    });
+
+    expect(repository.closeRecords).toHaveLength(1);
+    expect(repository.closeRecords[0]?.sessionKey).toBe("data-analyst:abc123");
+    expect(repository.closeRecords[0]?.closedAt).toBeInstanceOf(Date);
   });
 });

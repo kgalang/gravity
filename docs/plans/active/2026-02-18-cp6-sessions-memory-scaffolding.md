@@ -35,14 +35,14 @@ Before deeper session/compaction work, simplify the skill abstraction boundary:
 - [x] Migrate existing agent-local skill docs to namespaced entries in `store/shared/skills`.
 - [x] Remove runtime loading of `store/agents/{agentId}/skills` from context assembly and keep only declared shared skill loading.
 - [x] Delete agent-local skills directories and update invariants/tests/verification scripts to enforce shared-skill-only topology.
-- [ ] Define CP6 validation matrix for session isolation, compaction, and memory reload behavior.
-- [ ] Implement dual-history session file contract under `workspace/{agentId}/sessions/{sessionKey}/`.
-- [ ] Ensure per-turn `MEMORY.md` is loaded and reflected on immediate next turn.
-- [ ] Implement compaction flow with overflow recovery and automatic retry.
-- [ ] Add startup backfill/pre-run sync seam for missed Slack thread history.
-- [ ] Add session-end memory hook scaffold for idle-session eviction.
-- [ ] Review all CP6-related config surfaces and enforce fail-closed runtime warnings for invalid values (pre-MVP guardrail).
-- [ ] Update architecture/checkpoint/reliability docs with session boundary and rollback details.
+- [x] Define CP6 validation matrix for session isolation, compaction, and memory reload behavior.
+- [x] Implement dual-history session file contract under `workspace/{agentId}/sessions/{sessionKey}/`.
+- [x] Ensure per-turn `MEMORY.md` is loaded and reflected on immediate next turn.
+- [x] Implement compaction flow with overflow recovery and automatic retry.
+- [x] Add startup backfill/pre-run sync seam for missed Slack thread history.
+- [x] Add session-end memory hook scaffold for idle-session eviction.
+- [x] Review all CP6-related config surfaces and enforce fail-closed runtime warnings for invalid values (pre-MVP guardrail).
+- [x] Update architecture/checkpoint/reliability docs with session boundary and rollback details.
 
 ## Risks
 - Skill migration can silently drop behavioral instructions if shared skill IDs and bindings are not aligned before local folder removal.
@@ -56,5 +56,5 @@ Before deeper session/compaction work, simplify the skill abstraction boundary:
 - Compaction and memory reload behavior are validated in tests.
 - Startup backfill seam and memory hook scaffolds are in place.
 - Invalid CP6-related config values fail closed with runtime warnings visible at run time.
-- `npm run check` passes.
+- `npm run verify:cp6` and `npm run check` pass.
 - Docs and checkpoint state are updated in the same change.

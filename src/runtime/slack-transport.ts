@@ -3,6 +3,7 @@ import { type Static, type TSchema, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { SocketModeClient } from "@slack/socket-mode";
 import { WebClient } from "@slack/web-api";
+import type { SlackThreadHistoryMessage } from "./slack-thread-history.js";
 
 export type SlackSurface = "app_mention" | "message";
 export type SlackCommandSurface = "slash_command";
@@ -31,6 +32,8 @@ export type InboundSlackSlashCommand = {
   userId: string;
   triggerId: string | null;
 };
+
+export type { SlackThreadHistoryMessage } from "./slack-thread-history.js";
 
 type QueuedWork = () => Promise<void>;
 
@@ -153,6 +156,25 @@ export type WebClientLike = {
   };
   conversations: {
     open: (args: { users: string }) => Promise<{ channel?: { id?: string } }>;
+    replies?: (args: {
+      channel: string;
+      ts: string;
+      oldest?: string;
+      inclusive?: boolean;
+      limit?: number;
+      cursor?: string;
+    }) => Promise<{
+      messages?: Array<{
+        user?: string;
+        bot_id?: string;
+        text?: string;
+        ts?: string;
+        subtype?: string;
+      }>;
+      response_metadata?: {
+        next_cursor?: string;
+      };
+    }>;
   };
 };
 
@@ -300,6 +322,45 @@ function createDefaultWebClient(botToken: string): WebClientLike {
         return {
           channel: {
             id: typeof result.channel?.id === "string" ? result.channel.id : undefined,
+          },
+        };
+      },
+      async replies(args) {
+        const result = await client.conversations.replies({
+          channel: args.channel,
+          ts: args.ts,
+          oldest: args.oldest,
+          inclusive: args.inclusive,
+          limit: args.limit,
+          cursor: args.cursor,
+        });
+
+        return {
+          messages: Array.isArray(result.messages)
+            ? result.messages.map((message) => {
+                const candidate = message as Record<string, unknown>;
+                return {
+                  user:
+                    typeof candidate.user === "string" ? candidate.user : undefined,
+                  bot_id:
+                    typeof candidate.bot_id === "string"
+                      ? candidate.bot_id
+                      : undefined,
+                  text:
+                    typeof candidate.text === "string" ? candidate.text : undefined,
+                  ts: typeof candidate.ts === "string" ? candidate.ts : undefined,
+                  subtype:
+                    typeof candidate.subtype === "string"
+                      ? candidate.subtype
+                      : undefined,
+                };
+              })
+            : undefined,
+          response_metadata: {
+            next_cursor:
+              typeof result.response_metadata?.next_cursor === "string"
+                ? result.response_metadata.next_cursor
+                : undefined,
           },
         };
       },
@@ -532,6 +593,107 @@ export class SlackTransport {
 
   getBotUserId(): string | null {
     return this.botUserId;
+  }
+
+  async fetchThreadMessages(input: {
+    channelId: string;
+    threadTs: string;
+    oldestMessageTs?: string | null;
+  }): Promise<SlackThreadHistoryMessage[]> {
+    const replies = this.webClient.conversations.replies;
+    if (!replies) {
+      return [];
+    }
+
+    const normalizedChannelId = input.channelId.trim();
+    const normalizedThreadTs = input.threadTs.trim();
+    if (normalizedChannelId.length === 0 || normalizedThreadTs.length === 0) {
+      return [];
+    }
+
+    const oldestMessageTs = input.oldestMessageTs?.trim() || undefined;
+    const messages: SlackThreadHistoryMessage[] = [];
+    let cursor: string | undefined;
+    let pageCount = 0;
+    const maxPages = 4;
+
+    do {
+      const result = await replies({
+        channel: normalizedChannelId,
+        ts: normalizedThreadTs,
+        oldest: oldestMessageTs,
+        inclusive: false,
+        limit: 200,
+        cursor,
+      });
+
+      for (const message of result.messages ?? []) {
+        if (!message.ts || !message.text) {
+          continue;
+        }
+        const subtype =
+          typeof message.subtype === "string" ? message.subtype.trim() : "";
+        if (
+          subtype.length > 0 &&
+          subtype !== "file_share" &&
+          subtype !== "bot_message"
+        ) {
+          continue;
+        }
+
+        const isBot =
+          (this.botUserId !== null && message.user === this.botUserId) ||
+          Boolean(message.bot_id);
+        const effectiveUserId =
+          typeof message.user === "string"
+            ? message.user
+            : isBot
+              ? this.botUserId ?? "bot"
+              : null;
+        if (!effectiveUserId) {
+          continue;
+        }
+
+        if (
+          oldestMessageTs &&
+          Number.parseFloat(message.ts) <= Number.parseFloat(oldestMessageTs)
+        ) {
+          continue;
+        }
+
+        const normalizedText = stripSlackMentions(message.text).trim();
+        if (normalizedText.length === 0) {
+          continue;
+        }
+
+        messages.push({
+          sourceEventId: buildSourceEventId({
+            channelId: normalizedChannelId,
+            messageTs: message.ts,
+            userId: effectiveUserId,
+          }),
+          messageTs: message.ts,
+          userId: effectiveUserId,
+          text: normalizedText,
+          isBot,
+        });
+      }
+
+      cursor = result.response_metadata?.next_cursor?.trim() || undefined;
+      pageCount += 1;
+    } while (cursor && pageCount < maxPages);
+
+    if (cursor) {
+      this.log(
+        `[gravity][warning] slack thread history backfill truncated after ${maxPages} page(s) (channelId=${normalizedChannelId} threadTs=${normalizedThreadTs})`,
+      );
+    }
+
+    messages.sort(
+      (a, b) => Number.parseFloat(a.messageTs) - Number.parseFloat(b.messageTs),
+    );
+
+    return messages;
   }
 
   private async resolveDirectMessageChannel(userId: string): Promise<string> {

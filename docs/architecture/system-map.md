@@ -20,12 +20,15 @@ CP5.1 migration note:
 - `store/shared/skills`: canonical skill catalog inherited/composed by all agents (platform primitives + namespaced agent-specific modules).
 - `store/agents/{agentId}/memory/MEMORY.md`: persistent memory loaded each turn.
 
-## Session Contract (Target)
+## Session Contract (CP6)
 - Session key format: mode-dependent (`{agent-id}:main`, `{agent-id}:{thread_ts}`, `{agent-id}:{source_event_id}`, and proactive keys under `{agent-id}:proactive:*`).
 - Session metadata: `gravity.sessions` stores identity, mode, ownership, and last activity.
 - Permanent log: `workspace/{agent-id}/sessions/{session-key}/log.jsonl`.
 - LLM working context: `workspace/{agent-id}/sessions/{session-key}/context.jsonl`.
 - Cross-session search log: `workspace/{agent-id}/agent-log.jsonl`.
+- Pre-run sync seam: unsynced `log.jsonl` user/system entries are loaded into `context.jsonl` via source-event dedupe markers.
+- Startup backfill seam: active Slack thread sessions can ingest missed thread history into `log.jsonl` before normal processing.
+- Idle-session hook scaffold: idle timers close `gravity.sessions` metadata and emit a session-end memory-hook callback scaffold.
 
 ## Integration Targets
 - Slack Socket Mode routing from slash commands, app mentions, thread replies, and direct messages via compiled code-defined listener declarations.
@@ -36,4 +39,5 @@ CP5.1 migration note:
 - Quiet-hours policy can suppress proactive replay/scheduled runs while allowing explicit manual bypass.
 - Source-event idempotency is enforced before run execution (in-flight guard + `gravity.runs.source_event_id` check).
 - Claude API loop with compaction and tool-result truncation from `mvp_requirements.md`.
+- CP6 fail-closed runtime config: invalid session/compaction/retry/hook settings disable feature activation and emit runtime warnings.
 - DuckDB resource at `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb` for Wiggs.

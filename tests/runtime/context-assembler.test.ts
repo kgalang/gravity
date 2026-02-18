@@ -171,4 +171,57 @@ describe("assembleTurnContext", () => {
       "- Use DuckDB for factual claims when a query is needed.",
     );
   });
+
+  it("reloads MEMORY.md on the immediate next turn", async () => {
+    const tempRoot = await createTempRoot("gravity-context-memory-reload-");
+    const sharedRoot = path.join(tempRoot, "store", "shared");
+    const sharedSkillsDir = path.join(sharedRoot, "skills");
+    const agentMemoryDir = path.join(tempRoot, "store", "agents", "alpha", "memory");
+
+    await mkdir(sharedSkillsDir, { recursive: true });
+    await mkdir(agentMemoryDir, { recursive: true });
+    await writeFile(path.join(sharedSkillsDir, "query-gravity.md"), "Shared skill", "utf8");
+    await writeFile(path.join(agentMemoryDir, "MEMORY.md"), "Memory v1", "utf8");
+
+    const capabilityProfile = compileAgentCapabilities({
+      resources: [],
+      useCapabilities: [
+        {
+          capability: "query-gravity-v1",
+          bindResources: {},
+        },
+      ],
+    });
+
+    const firstTurn = await assembleTurnContext({
+      cwd: tempRoot,
+      sharedRoot: "store/shared",
+      prompt: "first",
+      agent: {
+        id: "alpha",
+        name: "Alpha",
+        description: "Data helper",
+        capabilityProfile,
+        memoryPath: "store/agents/alpha/memory",
+      },
+    });
+    expect(firstTurn.systemPrompt).toContain("Memory v1");
+
+    await writeFile(path.join(agentMemoryDir, "MEMORY.md"), "Memory v2", "utf8");
+
+    const secondTurn = await assembleTurnContext({
+      cwd: tempRoot,
+      sharedRoot: "store/shared",
+      prompt: "second",
+      agent: {
+        id: "alpha",
+        name: "Alpha",
+        description: "Data helper",
+        capabilityProfile,
+        memoryPath: "store/agents/alpha/memory",
+      },
+    });
+    expect(secondTurn.systemPrompt).toContain("Memory v2");
+    expect(secondTurn.systemPrompt).not.toContain("Memory v1");
+  });
 });

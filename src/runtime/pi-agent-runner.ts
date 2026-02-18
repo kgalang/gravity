@@ -1,4 +1,3 @@
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { agentRegistry } from "../../agents/index.js";
 import type { CompiledAgentCapabilities } from "../../agents/capability-compiler.js";
@@ -21,10 +20,15 @@ import { type Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { Kysely } from "kysely";
 import { gravitySchema, type GravityDatabase } from "./db.js";
+import type { SessionRuntimeConfig } from "./config.js";
 import type {
   ExecutorManager,
   ExecutorRuntime,
 } from "./executor-manager.js";
+import {
+  promptWithOverflowRecovery,
+} from "./session-overflow-recovery.js";
+import type { SessionHistoryStore } from "./session-history-store.js";
 
 const DEFAULT_ANTHROPIC_MODEL_ID = "claude-sonnet-4-5";
 
@@ -53,9 +57,12 @@ export type RunPiAgentTurnInput = {
   agentId: string;
   agentRuntime: ExecutorRuntime;
   sessionKey: string;
+  sourceEventId?: string | null;
   prompt: string;
   anthropicApiKey: string | null;
   executorManager: ExecutorManager;
+  sessionHistoryStore: SessionHistoryStore;
+  sessionConfig: SessionRuntimeConfig;
 };
 
 export type RunPiAgentTurnResult = {
@@ -82,14 +89,6 @@ function parseAssistantMessage(value: unknown): AgentAssistantMessage | null {
   }
 
   return value;
-}
-
-function resolvePathFromRepoRoot(inputPath: string): string {
-  if (path.isAbsolute(inputPath)) {
-    return inputPath;
-  }
-
-  return path.resolve(process.cwd(), inputPath);
 }
 
 function resolveAnthropicModelId(preferredModelId: string): Model<Api> {
@@ -219,19 +218,6 @@ function toAssemblerAgent(record: AgentRuntimeRecord): ContextAssemblerAgent {
   };
 }
 
-function createSessionContextPath(agentId: string, sessionKey: string): string {
-  const workspaceRoot = resolvePathFromRepoRoot(
-    agentRegistry.config.paths.workspaceRoot,
-  );
-  return path.join(
-    workspaceRoot,
-    agentId,
-    "sessions",
-    sessionKey,
-    "context.jsonl",
-  );
-}
-
 function summarizeForRunLog(responseText: string): string {
   const normalized = responseText.replace(/\s+/g, " ").trim();
   if (normalized.length <= 280) {
@@ -271,14 +257,40 @@ export async function runPiAgentTurn(
       `Agent ${agent.id} has no granted tool primitives from capabilities.`,
     );
   }
-  const sessionContextPath = createSessionContextPath(input.agentId, input.sessionKey);
-  const sessionDir = path.dirname(sessionContextPath);
-  await mkdir(sessionDir, { recursive: true });
+  const sessionPaths = await input.sessionHistoryStore.ensureSessionScaffold(
+    input.agentId,
+    input.sessionKey,
+  );
+  const sessionManager = SessionManager.open(
+    sessionPaths.contextPath,
+    sessionPaths.sessionDir,
+  );
+  if (input.sessionConfig.preRunSyncEnabled) {
+    const syncedMessages = await input.sessionHistoryStore.syncLogToSessionContext({
+      agentId: input.agentId,
+      sessionKey: input.sessionKey,
+      sessionManager,
+      excludeSourceEventId: input.sourceEventId,
+    });
+    if (syncedMessages > 0) {
+      console.log(
+        `[gravity] pre-run session sync appended ${syncedMessages} message(s) to context (agentId=${input.agentId} sessionKey=${input.sessionKey})`,
+      );
+    }
+  }
 
-  const sessionManager = SessionManager.open(sessionContextPath, sessionDir);
   const settingsManager = SettingsManager.inMemory({
-    compaction: { enabled: false },
-    retry: { enabled: true, maxRetries: 2 },
+    compaction: {
+      enabled: input.sessionConfig.compaction.enabled,
+      reserveTokens: input.sessionConfig.compaction.reserveTokens,
+      keepRecentTokens: input.sessionConfig.compaction.keepRecentTokens,
+    },
+    retry: {
+      enabled: input.sessionConfig.retry.enabled,
+      maxRetries: input.sessionConfig.retry.maxRetries,
+      baseDelayMs: input.sessionConfig.retry.baseDelayMs,
+      maxDelayMs: input.sessionConfig.retry.maxDelayMs,
+    },
   });
 
   const { session } = await createAgentSession({
@@ -316,7 +328,18 @@ export async function runPiAgentTurn(
     }
   });
 
-  await session.prompt(assembledContext.normalizedPrompt);
+  const promptResult = await promptWithOverflowRecovery({
+    session,
+    prompt: assembledContext.normalizedPrompt,
+    enabled: input.sessionConfig.overflowRecoveryEnabled,
+    compactInstructions:
+      "Compact stale context to recover from overflow and preserve unresolved tasks.",
+  });
+  if (promptResult.recoveredFromOverflow) {
+    console.log(
+      `[gravity] overflow recovery compacted and retried prompt (agentId=${input.agentId} sessionKey=${input.sessionKey})`,
+    );
+  }
 
   if (sessionErrorMessage) {
     throw new Error(sessionErrorMessage);

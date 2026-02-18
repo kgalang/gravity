@@ -17,6 +17,7 @@ export type EnsureSessionInput = {
 
 export type SessionCatalog = {
   ensureSessionActive: (input: EnsureSessionInput) => Promise<void>;
+  closeSession: (input: { sessionKey: string; closedAt?: Date }) => Promise<void>;
 };
 
 type SessionRecord = {
@@ -34,6 +35,7 @@ type SessionRecord = {
 
 export type SessionCatalogRepository = {
   upsertSession: (record: SessionRecord) => Promise<void>;
+  closeSession: (input: { sessionKey: string; closedAt: Date }) => Promise<void>;
 };
 
 function normalizeRequired(value: string, label: string): string {
@@ -70,6 +72,12 @@ export function createSessionCatalog(
         ownerUserId: normalizeNullable(input.ownerUserId),
         openedByTrigger: input.openedByTrigger,
         activityAt: new Date(),
+      });
+    },
+    async closeSession(input) {
+      await repository.closeSession({
+        sessionKey: normalizeRequired(input.sessionKey, "sessionKey"),
+        closedAt: input.closedAt ?? new Date(),
       });
     },
   };
@@ -112,6 +120,17 @@ export function createKyselySessionCatalogRepository(
             closed_at: null,
           }),
         )
+        .executeTakeFirst();
+    },
+    async closeSession(input) {
+      await schemaDb
+        .updateTable("sessions")
+        .set({
+          status: "closed",
+          last_activity_at: input.closedAt,
+          closed_at: input.closedAt,
+        })
+        .where("session_key", "=", input.sessionKey)
         .executeTakeFirst();
     },
   };

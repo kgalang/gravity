@@ -56,12 +56,28 @@ import {
   type SessionCatalog,
 } from "./runtime/session-catalog.js";
 import {
+  createSessionHistoryStore,
+  type SessionHistoryStore,
+  type SessionLogRole,
+} from "./runtime/session-history-store.js";
+import {
+  createSessionIdleEvictionCoordinator,
+  type SessionIdleEvictionCoordinator,
+} from "./runtime/session-idle-eviction.js";
+import {
+  createKyselySlackThreadBackfillRepository,
+  createSessionStartupBackfill,
+  type SessionStartupBackfill,
+} from "./runtime/session-startup-backfill.js";
+import {
   type InboundSlackMessage,
   type InboundSlackSlashCommand,
+  type SlackThreadHistoryMessage,
   normalizeSlashCommand,
   type SlackSlashCommandAckResponse,
   SlackTransport,
 } from "./runtime/slack-transport.js";
+import type { SessionRuntimeConfig } from "./runtime/config.js";
 type NormalizedTrigger = {
   triggerKind: RunTriggerKind;
   surface: RunSurface;
@@ -90,6 +106,10 @@ let slackTransport: SlackTransport | null = null;
 let dbClient: ReturnType<typeof createDb> | null = null;
 let runLogStore: RunLogStore | null = null;
 let sessionCatalog: SessionCatalog | null = null;
+let sessionHistoryStore: SessionHistoryStore | null = null;
+let sessionIdleEvictionCoordinator: SessionIdleEvictionCoordinator | null = null;
+let sessionStartupBackfill: SessionStartupBackfill | null = null;
+let sessionRuntimeConfig: SessionRuntimeConfig | null = null;
 let eventIdempotencyGuard: EventIdempotencyGuard | null = null;
 let proactiveTriggerScheduler: ProactiveTriggerScheduler | null = null;
 let anthropicApiKey: string | null = null;
@@ -116,6 +136,11 @@ async function shutdown(signal: string): Promise<void> {
     slackTransport = null;
   }
 
+  if (sessionIdleEvictionCoordinator !== null) {
+    await sessionIdleEvictionCoordinator.shutdown();
+    sessionIdleEvictionCoordinator = null;
+  }
+
   if (dbClient !== null) {
     await destroyDb(dbClient);
     dbClient = null;
@@ -123,6 +148,9 @@ async function shutdown(signal: string): Promise<void> {
 
   runLogStore = null;
   sessionCatalog = null;
+  sessionHistoryStore = null;
+  sessionStartupBackfill = null;
+  sessionRuntimeConfig = null;
   eventIdempotencyGuard = null;
   anthropicApiKey = null;
 
@@ -154,6 +182,16 @@ function toNormalizedTrigger(
     surface: dimensions.surface,
     entrypoint: dimensions.entrypoint,
   };
+}
+
+function sessionLogRoleForTrigger(
+  triggerKind: RunTriggerKind,
+): SessionLogRole {
+  if (triggerKind === "message") {
+    return "user";
+  }
+
+  return "system";
 }
 
 function createSlashRunId(sourceEventId: string): string {
@@ -224,6 +262,8 @@ async function ensureActiveSlackSession(input: {
 type ExecuteAgentRunInput = {
   db: ReturnType<typeof createDb>;
   runLogStore: RunLogStore;
+  sessionHistoryStore: SessionHistoryStore;
+  sessionLogRole: SessionLogRole;
   runId: string;
   agentId: string;
   sessionKey: string;
@@ -234,18 +274,31 @@ type ExecuteAgentRunInput = {
     sourceEventId?: string | null;
     channelId?: string | null;
     threadTs?: string | null;
+    messageTs?: string | null;
     userId?: string | null;
     policyDecisions?: Record<string, unknown>;
   };
   onResponse: (
     responseText: string,
     runResult: RunPiAgentTurnResult,
-  ) => Promise<void> | void;
+  ) =>
+    | Promise<{
+        messageTs?: string | null;
+      } | void>
+    | {
+        messageTs?: string | null;
+      }
+    | void;
 };
 
 async function executeAgentRun(
   input: ExecuteAgentRunInput,
 ): Promise<RunPiAgentTurnResult> {
+  const activeSessionRuntimeConfig = sessionRuntimeConfig;
+  if (!activeSessionRuntimeConfig) {
+    throw new Error("Session runtime config is not initialized");
+  }
+
   let resultSummary: string | null = null;
   const runContext = createRunContext({
     runId: input.runId,
@@ -265,6 +318,29 @@ async function executeAgentRun(
     getResultSummary: () => resultSummary,
   });
 
+  await input.sessionHistoryStore.appendSessionLog({
+    agentId: input.agentId,
+    sessionKey: input.sessionKey,
+    role: input.sessionLogRole,
+    text: input.prompt,
+    sourceEventId: input.lifecycleMetadata.sourceEventId,
+    runId: input.runId,
+    channelId: input.lifecycleMetadata.channelId,
+    threadTs: input.lifecycleMetadata.threadTs,
+    messageTs: input.lifecycleMetadata.messageTs,
+    userId: input.lifecycleMetadata.userId,
+    metadata: {
+      triggerKind: input.trigger.triggerKind,
+      entrypoint: input.trigger.entrypoint,
+      surface: input.trigger.surface,
+      phase: "run_input",
+    },
+  });
+  sessionIdleEvictionCoordinator?.recordActivity({
+    agentId: input.agentId,
+    sessionKey: input.sessionKey,
+  });
+
   return withRunLifecycle(
     runContext,
     composeRunLifecycleLoggers([lifecycleLogger, persistenceLogger]),
@@ -274,14 +350,39 @@ async function executeAgentRun(
         agentId: input.agentId,
         agentRuntime: resolveAgentRuntimePolicy(input.agentId),
         sessionKey: input.sessionKey,
+        sourceEventId: input.lifecycleMetadata.sourceEventId,
         prompt: input.prompt,
         anthropicApiKey,
         executorManager,
+        sessionHistoryStore: input.sessionHistoryStore,
+        sessionConfig: activeSessionRuntimeConfig,
       });
 
       const responseText = runResult.responseText;
       resultSummary = summarizeAgentResponseForRunLog(responseText);
-      await input.onResponse(responseText, runResult);
+      const responseMetadata = await input.onResponse(responseText, runResult);
+      await input.sessionHistoryStore.appendSessionLog({
+        agentId: input.agentId,
+        sessionKey: input.sessionKey,
+        role: "assistant",
+        text: responseText,
+        sourceEventId: input.lifecycleMetadata.sourceEventId,
+        runId: input.runId,
+        channelId: input.lifecycleMetadata.channelId,
+        threadTs: input.lifecycleMetadata.threadTs,
+        messageTs: responseMetadata?.messageTs ?? null,
+        userId: null,
+        metadata: {
+          triggerKind: input.trigger.triggerKind,
+          entrypoint: input.trigger.entrypoint,
+          surface: input.trigger.surface,
+          phase: "run_output",
+        },
+      });
+      sessionIdleEvictionCoordinator?.recordActivity({
+        agentId: input.agentId,
+        sessionKey: input.sessionKey,
+      });
       return runResult;
     },
   );
@@ -805,17 +906,16 @@ async function deliverProactiveResponse(input: {
   transport: SlackTransport;
   delivery: PreparedProactiveDelivery;
   responseText: string;
-}): Promise<void> {
+}): Promise<string> {
   if (input.delivery.threadTs) {
-    await input.transport.postThreadReply(
+    return input.transport.postThreadReply(
       input.delivery.channelId,
       input.delivery.threadTs,
       input.responseText,
     );
-    return;
   }
 
-  await input.transport.postChannelMessage(
+  return input.transport.postChannelMessage(
     input.delivery.channelId,
     input.responseText,
   );
@@ -830,12 +930,16 @@ async function handleProactiveTrigger(
   if (!sessionCatalog) {
     throw new Error("Session catalog is not initialized");
   }
+  if (!sessionHistoryStore) {
+    throw new Error("Session history store is not initialized");
+  }
   if (!dbClient) {
     throw new Error("DB client is not initialized");
   }
 
   const activeRunLogStore = runLogStore;
   const activeSessionCatalog = sessionCatalog;
+  const activeSessionHistoryStore = sessionHistoryStore;
   const activeDbClient = dbClient;
   const activeSlackTransport = slackTransport;
   if (!activeSlackTransport) {
@@ -897,6 +1001,8 @@ async function handleProactiveTrigger(
     const runResult = await executeAgentRun({
       db: activeDbClient,
       runLogStore: activeRunLogStore,
+      sessionHistoryStore: activeSessionHistoryStore,
+      sessionLogRole: sessionLogRoleForTrigger(normalizedTrigger.triggerKind),
       runId,
       agentId: event.agentId,
       sessionKey,
@@ -907,6 +1013,7 @@ async function handleProactiveTrigger(
         sourceEventId: event.sourceEventId,
         channelId: delivery.channelId,
         threadTs: delivery.threadTs,
+        messageTs: null,
         userId: delivery.ownerUserId,
         policyDecisions: {
           ...delivery.policyDecisions,
@@ -914,7 +1021,7 @@ async function handleProactiveTrigger(
         },
       },
       onResponse: async (responseText) => {
-        await deliverProactiveResponse({
+        const responseMessageTs = await deliverProactiveResponse({
           transport: activeSlackTransport,
           delivery,
           responseText,
@@ -929,6 +1036,7 @@ async function handleProactiveTrigger(
           ownerUserId: delivery.ownerUserId,
           openedByTrigger: normalizedTrigger.triggerKind,
         });
+        return { messageTs: responseMessageTs };
       },
     });
 
@@ -978,6 +1086,9 @@ async function handleInboundSlashCommand(
   if (!sessionCatalog) {
     throw new Error("Session catalog is not initialized");
   }
+  if (!sessionHistoryStore) {
+    throw new Error("Session history store is not initialized");
+  }
   if (!dbClient) {
     throw new Error("DB client is not initialized");
   }
@@ -995,6 +1106,7 @@ async function handleInboundSlashCommand(
 
   const activeDbClient = dbClient;
   const activeRunLogStore = runLogStore;
+  const activeSessionHistoryStore = sessionHistoryStore;
   const activeSlackTransport = slackTransport;
   const activeAgentId = decision.agentId;
   const resolvedSessionMode = decision.sessionMode;
@@ -1117,6 +1229,8 @@ async function handleInboundSlashCommand(
     const runResult = await executeAgentRun({
       db: activeDbClient,
       runLogStore: activeRunLogStore,
+      sessionHistoryStore: activeSessionHistoryStore,
+      sessionLogRole: sessionLogRoleForTrigger(normalizedTrigger.triggerKind),
       runId,
       agentId: activeAgentId,
       sessionKey,
@@ -1127,6 +1241,7 @@ async function handleInboundSlashCommand(
         sourceEventId: command.sourceEventId,
         channelId: command.channelId,
         threadTs,
+        messageTs: null,
         userId: command.userId,
         policyDecisions: {
           trigger: "slash_command",
@@ -1135,7 +1250,7 @@ async function handleInboundSlashCommand(
         },
       },
       onResponse: async (responseText) => {
-        await activeSlackTransport.postThreadReply(
+        const responseMessageTs = await activeSlackTransport.postThreadReply(
           command.channelId,
           threadTs,
           responseText,
@@ -1150,6 +1265,7 @@ async function handleInboundSlashCommand(
           ownerUserId: command.userId,
           openedByTrigger: normalizedTrigger.triggerKind,
         });
+        return { messageTs: responseMessageTs };
       },
     });
 
@@ -1181,20 +1297,19 @@ async function deliverMessageResponse(input: {
   message: InboundSlackMessage;
   entrypoint: MessageEntrypoint;
   responseText: string;
-}): Promise<void> {
+}): Promise<string> {
   if (!slackTransport) {
     throw new Error("Slack transport is not initialized");
   }
 
   if (input.entrypoint === "direct_message") {
-    await slackTransport.postChannelMessage(
+    return slackTransport.postChannelMessage(
       input.message.channelId,
       input.responseText,
     );
-    return;
   }
 
-  await slackTransport.postThreadReply(
+  return slackTransport.postThreadReply(
     input.message.channelId,
     input.message.threadTs,
     input.responseText,
@@ -1236,6 +1351,9 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
   if (!sessionCatalog) {
     throw new Error("Session catalog is not initialized");
   }
+  if (!sessionHistoryStore) {
+    throw new Error("Session history store is not initialized");
+  }
   if (!dbClient) {
     throw new Error("DB client is not initialized");
   }
@@ -1253,6 +1371,7 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
 
   const activeDbClient = dbClient;
   const activeRunLogStore = runLogStore;
+  const activeSessionHistoryStore = sessionHistoryStore;
   const activeSessionCatalog = sessionCatalog;
   const resolvedAgentId = decision.agentId;
   const resolvedEntrypoint = decision.entrypoint;
@@ -1296,6 +1415,8 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
     const runResult = await executeAgentRun({
       db: activeDbClient,
       runLogStore: activeRunLogStore,
+      sessionHistoryStore: activeSessionHistoryStore,
+      sessionLogRole: sessionLogRoleForTrigger(normalizedTrigger.triggerKind),
       runId,
       agentId: resolvedAgentId,
       sessionKey,
@@ -1306,6 +1427,7 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
         sourceEventId: message.sourceEventId,
         channelId: message.channelId,
         threadTs: message.threadTs,
+        messageTs: message.messageTs,
         userId: message.userId,
         policyDecisions: {
           trigger: resolvedEntrypoint,
@@ -1314,7 +1436,7 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
         },
       },
       onResponse: async (responseText) => {
-        await deliverMessageResponse({
+        const responseMessageTs = await deliverMessageResponse({
           message,
           entrypoint: resolvedEntrypoint,
           responseText,
@@ -1329,6 +1451,7 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
           ownerUserId: message.userId,
           openedByTrigger: normalizedTrigger.triggerKind,
         });
+        return { messageTs: responseMessageTs };
       },
     });
 
@@ -1357,6 +1480,10 @@ try {
     console.log(`[gravity] bootstrap started at ${startedAt}`);
     console.log(`[gravity] env=${config.env}`);
     console.log(`[gravity] database=${config.databaseUrl}`);
+    sessionRuntimeConfig = config.session;
+    for (const warning of config.runtimeWarnings) {
+      console.warn(`[gravity][warning] ${warning}`);
+    }
     anthropicApiKey = config.anthropicApiKey;
     console.log("[gravity] runtime scaffold active");
     dbClient = createDb(config.databaseUrl);
@@ -1364,11 +1491,35 @@ try {
     sessionCatalog = createSessionCatalog(
       createKyselySessionCatalogRepository(dbClient),
     );
+    sessionHistoryStore = createSessionHistoryStore({
+      cwd: process.cwd(),
+      workspaceRoot: agentRegistry.config.paths.workspaceRoot,
+    });
+    const activeSessionHistoryStore = sessionHistoryStore;
+    if (!activeSessionHistoryStore) {
+      throw new Error("Session history store failed to initialize");
+    }
+    sessionIdleEvictionCoordinator = createSessionIdleEvictionCoordinator({
+      enabled: config.session.idleEviction.enabled,
+      idleTimeoutMs: config.session.idleEviction.timeoutMs,
+      onSessionIdle: async (event) => {
+        if (sessionCatalog) {
+          await sessionCatalog.closeSession({ sessionKey: event.sessionKey });
+        }
+
+        if (config.session.idleEviction.memoryHookEnabled) {
+          console.warn(
+            `[gravity][warning] session-end memory hook scaffold fired (agentId=${event.agentId} sessionKey=${event.sessionKey} reason=${event.reason}); silent memory-write turn is not yet implemented`,
+          );
+        }
+      },
+    });
     eventIdempotencyGuard = createEventIdempotencyGuard(
       createKyselyEventIdempotencyRepository(dbClient),
     );
     console.log("[gravity] run log store active (gravity.runs)");
     console.log("[gravity] session catalog active (gravity.sessions)");
+    console.log("[gravity] session history store active (workspace dual-history)");
     console.log("[gravity] event idempotency guard active (source_event_id)");
 
     if (config.slackAppToken && config.slackBotToken) {
@@ -1389,6 +1540,29 @@ try {
         "[gravity] slack transport disabled (set SLACK_APP_TOKEN and SLACK_BOT_TOKEN to enable)",
       );
     }
+
+    const activeSlackTransport = slackTransport;
+    sessionStartupBackfill = createSessionStartupBackfill({
+      enabled: config.session.startupBackfillEnabled,
+      repository: createKyselySlackThreadBackfillRepository(dbClient),
+      source: activeSlackTransport
+        ? {
+            fetchThreadMessages: async (request): Promise<
+              ReadonlyArray<SlackThreadHistoryMessage>
+            > =>
+              activeSlackTransport.fetchThreadMessages({
+                channelId: request.channelId,
+                threadTs: request.threadTs,
+                oldestMessageTs: request.oldestMessageTs,
+              }),
+          }
+        : null,
+      historyStore: activeSessionHistoryStore,
+    });
+    const startupBackfillResult = await sessionStartupBackfill.reconcile();
+    console.log(
+      `[gravity] session startup backfill scanned ${startupBackfillResult.sessionsScanned} session(s), appended ${startupBackfillResult.messagesAppended} message(s)`,
+    );
 
     proactiveTriggerScheduler = createProactiveTriggerScheduler({
       db: dbClient,
