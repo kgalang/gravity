@@ -380,6 +380,67 @@ function invariantStableIdentifiers() {
   }
 }
 
+function collectNestedGitDirs(startDir, relativePrefix = "") {
+  if (!existsSync(startDir)) {
+    return [];
+  }
+
+  const nested = [];
+  const entries = readdirSync(startDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const childRelative = relativePrefix
+      ? path.join(relativePrefix, entry.name)
+      : entry.name;
+    if (entry.name === ".git") {
+      nested.push(childRelative.replaceAll(path.sep, "/"));
+      continue;
+    }
+
+    const childAbsolute = path.join(startDir, entry.name);
+    nested.push(...collectNestedGitDirs(childAbsolute, childRelative));
+  }
+
+  return nested;
+}
+
+function invariantStoreConventions() {
+  const requiredDirectories = [
+    "store/shared/skills",
+    "store/shared/connectors",
+    "store/shared/knowledge",
+    "store/agents",
+  ];
+  for (const relativePath of requiredDirectories) {
+    if (!existsSync(path.join(root, relativePath))) {
+      addError(`Store convention missing directory: ${relativePath}`);
+    }
+  }
+
+  const requiredSharedSkills = [
+    "store/shared/skills/log-run.md",
+    "store/shared/skills/query-gravity.md",
+    "store/shared/skills/rollback.md",
+    "store/shared/skills/self-author.md",
+  ];
+  for (const relativePath of requiredSharedSkills) {
+    if (!existsSync(path.join(root, relativePath))) {
+      addError(`Store convention missing shared skill: ${relativePath}`);
+    }
+  }
+
+  const nestedStoreGitDirs = collectNestedGitDirs(path.join(root, "store"));
+  for (const nestedGitDir of nestedStoreGitDirs) {
+    addError(
+      `Nested git directory found under store/: store/${nestedGitDir}. ` +
+        "Use repository root git history; do not initialize a separate store repo.",
+    );
+  }
+}
+
 invariantMigrationScaffold();
 invariantSeedAgentFilesystemParity();
 invariantActivePlanDiscipline();
@@ -387,6 +448,7 @@ const checkpointRows = invariantCheckpointIntegrity();
 invariantPlaceholderChannels(checkpointRows);
 invariantRuntimeInterfaceDocumentation();
 invariantStableIdentifiers();
+invariantStoreConventions();
 
 if (errors.length > 0) {
   console.error("Invariant checks failed:\n");
