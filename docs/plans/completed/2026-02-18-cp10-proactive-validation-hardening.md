@@ -1,6 +1,6 @@
 # CP10 Plan (Proactive Validation + Hardening)
 
-Status: active
+Status: complete
 Owner: kevin + codex
 Last Updated: 2026-02-18
 
@@ -15,13 +15,18 @@ CP10 work now focuses on runtime validation and operational seams around existin
 - Out of scope: CP6 session compaction internals, CP7 memory test matrix expansion, and CP11 demo polish scripting.
 
 ## Work Items
-- [ ] Define CP10 validation matrix for proactive `cron` and `heartbeat` triggers across delivery modes.
-- [ ] Validate proactive run logging parity in `gravity.runs` (`trigger_kind`, `entrypoint`, `status`, `source_event_id`, `session_key`).
-- [ ] Validate delivery behavior for `channel_thread` (root thread + threaded response) and `dm`.
-- [ ] Implement and validate replay/backfill behavior for missed proactive runs after restart.
-- [ ] Implement manual wake tooling for deterministic demo invocation of heartbeat trigger paths.
-- [ ] Add quiet-hours policy checks and verify suppression behavior.
-- [ ] Update architecture/runbook/checkpoint docs for proactive operational controls and rollback path.
+- [x] Define CP10 validation matrix for proactive `cron` and `heartbeat` triggers across delivery modes.
+- [x] Validate proactive run logging parity in `gravity.runs` (`trigger_kind`, `entrypoint`, `status`, `source_event_id`, `session_key`).
+- [x] Validate delivery behavior for `channel_thread` and `dm`.
+- [x] Implement and validate replay/backfill behavior for missed proactive runs after restart.
+- [x] Implement manual wake tooling for deterministic demo invocation of heartbeat trigger paths.
+- [x] Add quiet-hours policy checks and verify suppression behavior.
+- [x] Update architecture/runbook/checkpoint docs for proactive operational controls and rollback path.
+
+## Verification Evidence (2026-02-18)
+- `npm run verify:cp10` passed and validated scheduler replay (`cron` + `heartbeat`), manual wake behavior, quiet-hours suppression, and persisted proactive run lifecycle rows.
+- `npm run check` passed after CP10 runtime and docs updates.
+- Manual wake command path is available through mapped slash commands by sending `!wake` (or `!wake <trigger-id>`) as command text.
 
 ## Risks
 - Scheduler replay semantics can create duplicate or missed proactive deliveries if idempotency boundaries are unclear.

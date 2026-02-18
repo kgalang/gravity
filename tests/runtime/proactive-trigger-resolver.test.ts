@@ -213,4 +213,54 @@ describe("resolveProactiveTriggers", () => {
       },
     ]);
   });
+
+  it("propagates enabled quiet-hours policy into resolved triggers", () => {
+    const triggers = resolveProactiveTriggers([
+      {
+        id: "data-analyst",
+        channel_id: "C123",
+        config: {
+          policy: {
+            quietHours: {
+              enabled: true,
+              timezone: "America/Los_Angeles",
+              startHour: 22,
+              endHour: 7,
+              daysOfWeek: [1, 2, 3, 4, 5],
+            },
+          },
+          proactiveTriggers: [
+            {
+              id: "daily",
+              kind: "cron",
+              schedule: "0 9 * * *",
+              prompt: "run daily",
+            },
+          ],
+        },
+      } satisfies ActiveAgentProactiveRow,
+    ]);
+
+    expect(triggers).toEqual([
+      {
+        agentId: "data-analyst",
+        triggerId: "daily",
+        kind: "cron",
+        schedule: "0 9 * * *",
+        prompt: "run daily",
+        sessionMode: "isolated",
+        delivery: {
+          surface: "slack",
+          mode: "channel_thread",
+          channelId: "C123",
+        },
+        quietHours: {
+          timezone: "America/Los_Angeles",
+          startHour: 22,
+          endHour: 7,
+          daysOfWeek: [1, 2, 3, 4, 5],
+        },
+      },
+    ]);
+  });
 });

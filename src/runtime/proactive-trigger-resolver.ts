@@ -1,6 +1,7 @@
 import type {
   AgentConfig,
   AgentDeliveryTarget,
+  AgentQuietHoursPolicy,
   AgentProactiveTrigger,
 } from "./agent-config.js";
 import type { SessionMode } from "./session-catalog.js";
@@ -24,6 +25,13 @@ export type ProactiveDeliveryTarget =
       userId: string;
     };
 
+export type ProactiveQuietHours = {
+  timezone: string;
+  startHour: number;
+  endHour: number;
+  daysOfWeek?: number[];
+};
+
 type BaseResolvedProactiveTrigger = {
   agentId: string;
   triggerId: string;
@@ -31,6 +39,7 @@ type BaseResolvedProactiveTrigger = {
   prompt: string;
   sessionMode: SessionMode;
   delivery: ProactiveDeliveryTarget;
+  quietHours?: ProactiveQuietHours;
 };
 
 export type ResolvedProactiveTrigger =
@@ -121,6 +130,23 @@ function normalizeSessionMode(
   return requested;
 }
 
+function resolveQuietHours(
+  rawQuietHours: AgentQuietHoursPolicy | undefined,
+): ProactiveQuietHours | undefined {
+  if (!rawQuietHours || rawQuietHours.enabled === false) {
+    return undefined;
+  }
+
+  return {
+    timezone: rawQuietHours.timezone,
+    startHour: rawQuietHours.startHour,
+    endHour: rawQuietHours.endHour,
+    daysOfWeek: rawQuietHours.daysOfWeek
+      ? [...rawQuietHours.daysOfWeek]
+      : undefined,
+  };
+}
+
 export function resolveProactiveTriggers(
   agents: ReadonlyArray<ActiveAgentProactiveRow>,
 ): ResolvedProactiveTrigger[] {
@@ -128,6 +154,7 @@ export function resolveProactiveTriggers(
 
   for (const agent of agents) {
     const rawTriggers = agent.config.proactiveTriggers ?? [];
+    const quietHours = resolveQuietHours(agent.config.policy?.quietHours);
 
     for (const rawTrigger of rawTriggers) {
       if (!rawTrigger || typeof rawTrigger !== "object") {
@@ -169,6 +196,7 @@ export function resolveProactiveTriggers(
           prompt,
           sessionMode,
           delivery,
+          ...(quietHours ? { quietHours } : {}),
         });
         continue;
       }
@@ -186,6 +214,7 @@ export function resolveProactiveTriggers(
         prompt,
         sessionMode,
         delivery,
+        ...(quietHours ? { quietHours } : {}),
       });
     }
   }

@@ -11,6 +11,7 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "verify:cp5": "tsx scripts/verify-cp5.ts",
+    "verify:cp10": "tsx scripts/verify-cp10.ts",
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#dist\"",
     "lint:repo": "node scripts/lint-repo.mjs",
     "test:invariants": "node scripts/test-invariants.mjs",
