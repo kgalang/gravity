@@ -1,16 +1,48 @@
 import { Cron } from "croner";
 import type { Kysely } from "kysely";
-import { parseAgentConfig } from "./agent-config.js";
 import { type GravityDatabase, gravitySchema } from "./db.js";
-import {
-  resolveProactiveTriggers,
-  type ActiveAgentProactiveRow,
-  type ProactiveDeliveryTarget,
-  type ProactiveQuietHours,
-  type ResolvedProactiveTrigger,
-} from "./proactive-trigger-resolver.js";
 import type { SessionMode } from "./session-catalog.js";
-import type { ProactiveTriggerKind } from "./trigger-normalizer.js";
+
+export type ProactiveTriggerKind = "cron" | "heartbeat";
+
+export type ProactiveDeliveryTarget =
+  | {
+      surface: "slack";
+      mode: "channel_thread";
+      channelId: string;
+    }
+  | {
+      surface: "slack";
+      mode: "dm";
+      userId: string;
+    };
+
+export type ProactiveQuietHours = {
+  timezone: string;
+  startHour: number;
+  endHour: number;
+  daysOfWeek?: number[];
+};
+
+type BaseResolvedProactiveTrigger = {
+  agentId: string;
+  triggerId: string;
+  kind: ProactiveTriggerKind;
+  prompt: string;
+  sessionMode: SessionMode;
+  delivery: ProactiveDeliveryTarget;
+  quietHours?: ProactiveQuietHours;
+};
+
+export type ResolvedProactiveTrigger =
+  | (BaseResolvedProactiveTrigger & {
+      kind: "cron";
+      schedule: string;
+    })
+  | (BaseResolvedProactiveTrigger & {
+      kind: "heartbeat";
+      intervalSeconds: number;
+    });
 
 type ProactiveTriggerOrigin = "scheduled" | "replay" | "manual";
 
@@ -51,7 +83,7 @@ export type ProactiveTriggerScheduler = {
 type ProactiveTriggerSchedulerConfig = {
   db: Kysely<GravityDatabase>;
   onTrigger: (event: ProactiveTriggerFireEvent) => Promise<void> | void;
-  loadTriggers?: (
+  loadTriggers: (
     db: Kysely<GravityDatabase>,
   ) => Promise<ReadonlyArray<ResolvedProactiveTrigger>>;
   log?: (line: string) => void;
@@ -81,32 +113,6 @@ const WEEKDAY_TO_INDEX: Record<string, number> = {
   fri: 5,
   sat: 6,
 };
-
-async function loadActiveAgentProactiveRows(
-  db: Kysely<GravityDatabase>,
-): Promise<ActiveAgentProactiveRow[]> {
-  const rows = await gravitySchema(db)
-    .selectFrom("agents")
-    .select(["id", "channel_id", "config"])
-    .where("status", "=", "active")
-    .execute();
-
-  return rows.map((row) => ({
-    id: row.id,
-    channel_id: row.channel_id,
-    config: parseAgentConfig(row.config, {
-      warn: console.warn,
-      context: `agentId=${row.id}`,
-    }),
-  }));
-}
-
-async function loadTriggersFromJsonb(
-  db: Kysely<GravityDatabase>,
-): Promise<ReadonlyArray<ResolvedProactiveTrigger>> {
-  const activeAgents = await loadActiveAgentProactiveRows(db);
-  return resolveProactiveTriggers(activeAgents);
-}
 
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -332,7 +338,7 @@ function triggerKey(trigger: ResolvedProactiveTrigger): string {
 export function createProactiveTriggerScheduler(
   config: ProactiveTriggerSchedulerConfig,
 ): ProactiveTriggerScheduler {
-  const loadTriggers = config.loadTriggers ?? loadTriggersFromJsonb;
+  const loadTriggers = config.loadTriggers;
   const log = config.log ?? console.log;
   const now = config.now ?? (() => new Date());
   const enableReplay = config.enableReplay ?? true;

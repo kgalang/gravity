@@ -189,6 +189,7 @@ export type AgentDefinitionInput = {
   model?: string;
   proactive?: AgentProactiveInput;
   connectors?: readonly string[];
+  duckdbPath?: string;
   runtime?: AgentRuntime;
   quietHours?: QuietHoursInput;
   session?: {
@@ -205,6 +206,7 @@ export type AgentDefinition = Readonly<{
   model?: string;
   proactive?: AgentProactive;
   connectors?: readonly string[];
+  duckdbPath?: string;
   runtime?: AgentRuntime;
   quietHours?: QuietHours;
   session?: Readonly<{
@@ -473,6 +475,7 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
     ? normalizeQuietHours(input.quietHours, `agent(${id}).quietHours`)
     : undefined;
   const connectors = normalizeStringList(input.connectors, `agent(${id}).connectors`);
+  const duckdbPath = normalizeOptionalString(input.duckdbPath);
 
   const tools = Array.from(
     new Set(input.tools.map((tool) => normalizeRequiredString(tool, `agent(${id}).tools`))),
@@ -532,6 +535,7 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
     ...(model ? { model } : {}),
     ...(proactive ? { proactive } : {}),
     ...(connectors ? { connectors } : {}),
+    ...(duckdbPath ? { duckdbPath } : {}),
     ...(runtime ? { runtime } : {}),
     ...(quietHours ? { quietHours } : {}),
     ...(input.session

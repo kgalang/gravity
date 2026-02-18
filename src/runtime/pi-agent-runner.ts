@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { agentRegistry } from "../../agents/index.js";
 import { type Api, getModels, type Model } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
@@ -14,7 +15,6 @@ import {
 import { type Static, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { Kysely } from "kysely";
-import { parseAgentConfig, type AgentConfig } from "./agent-config.js";
 import { gravitySchema, type GravityDatabase } from "./db.js";
 import type {
   ExecutorManager,
@@ -32,7 +32,8 @@ type AgentRuntimeRecord = {
   model: string;
   skills_path: string | null;
   memory_path: string | null;
-  config: AgentConfig;
+  connector: string | null;
+  duckdbPath: string | null;
 };
 
 type LoadedDocument = {
@@ -368,6 +369,27 @@ function createStaticResourceLoader(systemPrompt: string): ResourceLoader {
   };
 }
 
+function loadCodeDefinedAgentDetails(agentId: string): {
+  name: string;
+  description: string | null;
+  model: string;
+  connector: string | null;
+  duckdbPath: string | null;
+} {
+  const registered = agentRegistry.agentsById.get(agentId);
+  if (!registered) {
+    throw new Error(`Agent declaration not found for id: ${agentId}`);
+  }
+
+  return {
+    name: registered.declaration.name,
+    description: registered.declaration.description ?? null,
+    model: registered.model,
+    connector: registered.declaration.connectors?.[0] ?? null,
+    duckdbPath: registered.declaration.duckdbPath ?? null,
+  };
+}
+
 async function loadAgentRuntimeRecord(
   db: Kysely<GravityDatabase>,
   agentId: string,
@@ -376,12 +398,8 @@ async function loadAgentRuntimeRecord(
     .selectFrom("agents")
     .select([
       "id",
-      "name",
-      "description",
-      "model",
       "skills_path",
       "memory_path",
-      "config",
     ])
     .where("id", "=", agentId)
     .where("status", "=", "active")
@@ -391,12 +409,17 @@ async function loadAgentRuntimeRecord(
     throw new Error(`Active agent not found for id: ${agentId}`);
   }
 
+  const declaration = loadCodeDefinedAgentDetails(agentId);
+
   return {
-    ...row,
-    config: parseAgentConfig(row.config, {
-      warn: console.warn,
-      context: `agentId=${row.id}`,
-    }),
+    id: row.id,
+    name: declaration.name,
+    description: declaration.description,
+    model: declaration.model,
+    skills_path: row.skills_path,
+    memory_path: row.memory_path,
+    connector: declaration.connector,
+    duckdbPath: declaration.duckdbPath,
   };
 }
 
@@ -431,8 +454,8 @@ export async function runPiAgentTurn(
   const normalizedPrompt = normalizeUserPrompt(input.prompt);
   const skillPath = asStringOrNull(agent.skills_path);
   const memoryPath = asStringOrNull(agent.memory_path);
-  const connectorName = agent.config.connector ?? null;
-  const duckdbPath = agent.config.duckdb_path ?? null;
+  const connectorName = asStringOrNull(agent.connector);
+  const duckdbPath = asStringOrNull(agent.duckdbPath);
 
   const sharedSkillsDir = resolvePathFromRepoRoot("store/shared/skills");
   const sharedConnectorsDir = resolvePathFromRepoRoot("store/shared/connectors");
