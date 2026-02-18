@@ -64,7 +64,7 @@ Gate:
 - `npm run check`
 
 ### Step 5 - Consolidate executor seam
-Status: next
+Status: complete
 
 Deliverables:
 - Introduce executor-manager wiring so all tool calls route through one `Executor` seam.
@@ -75,7 +75,7 @@ Gate:
 - `npm run check`
 
 ### Step 6 - Remove JSONB-driven legacy modules
-Status: pending
+Status: next
 
 Deliverables:
 - Remove the following modules after cutovers are fully wired:
@@ -122,6 +122,9 @@ Gate:
 - Cut over proactive scheduler trigger loading in `src/index.ts` + `src/runtime/proactive-trigger-scheduler.ts` to compiled declarations (`compiledDeclarations.proactive.triggers`) filtered by active DB agent status, removing runtime proactive routing dependency on JSONB resolver/config parsing.
 - Added `src/runtime/session-key.ts` canonical builders and `tests/runtime/session-key.test.ts` coverage for canonical session key patterns across slash/message/proactive modes (main/thread/isolated + DM thread fallback).
 - Proactive trigger dimensions at runtime ingress now come from scheduler-emitted typed trigger dimensions (`event.trigger`) rather than proactive trigger normalization helpers.
+- Added `src/runtime/executor-manager.ts` as a single `Executor` seam for tool execution with per-agent runtime selection (`host` default, `sandbox` scaffold disabled).
+- Wired `src/runtime/pi-agent-runner.ts` tool binding through `ExecutorManager.resolve(runtime)` instead of direct tool construction, and wired runtime policy selection in `src/index.ts` via `agentRegistry` declarations.
+- Added `tests/runtime/executor-manager.test.ts` coverage for host runtime resolution and fail-closed sandbox behavior.
 
 ## Parity Matrix (Required)
 - Slash command routing + ack behavior parity.
