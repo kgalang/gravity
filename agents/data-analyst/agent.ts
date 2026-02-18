@@ -6,8 +6,12 @@ export const dataAnalystAgent = defineAgent({
   description: "Data analyst proof-of-concept agent.",
   model: "claude-sonnet-4-5-20250929",
   runtime: "host",
-  connectors: ["duckdb"],
-  duckdbPath: "/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb",
+  connectors: [
+    {
+      type: "duckdb",
+      path: "/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb",
+    },
+  ],
   session: {
     defaultMode: "thread",
   },

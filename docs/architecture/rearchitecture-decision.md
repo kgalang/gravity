@@ -78,6 +78,11 @@ Expected optional fields:
 - `quietHours`
 - `session`
 
+Connector config contract:
+- Connector-specific settings must be nested inside the connector declaration (`connectors` array).
+- Example: DuckDB path is declared as `connectors: [{ type: "duckdb", path: "<path>" }]`.
+- No top-level connector-specific fields are allowed in `defineAgent(...)`.
+
 Policy boundary:
 - Self-authoring may modify skills and memory files.
 - Agent definition code changes are human-initiated in this phase.

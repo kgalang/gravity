@@ -6,7 +6,11 @@ export const complianceHelperAgent = defineAgent({
   description: "Compliance review proof-of-concept agent.",
   model: "claude-sonnet-4-5-20250929",
   runtime: "host",
-  connectors: ["knowledge-docs"],
+  connectors: [
+    {
+      type: "knowledge-docs",
+    },
+  ],
   session: {
     defaultMode: "thread",
   },

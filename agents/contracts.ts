@@ -178,6 +178,30 @@ export type AgentProactive = Readonly<{
   triggers: readonly AgentProactiveTrigger[];
 }>;
 
+export type DuckdbConnectorInput = {
+  type: "duckdb";
+  path: string;
+};
+
+export type KnowledgeDocsConnectorInput = {
+  type: "knowledge-docs";
+};
+
+export type AgentConnectorInput =
+  | DuckdbConnectorInput
+  | KnowledgeDocsConnectorInput;
+
+export type DuckdbConnector = Readonly<{
+  type: "duckdb";
+  path: string;
+}>;
+
+export type KnowledgeDocsConnector = Readonly<{
+  type: "knowledge-docs";
+}>;
+
+export type AgentConnector = DuckdbConnector | KnowledgeDocsConnector;
+
 type NonEmptyArray<T> = readonly [T, ...T[]];
 
 export type AgentDefinitionInput = {
@@ -188,8 +212,7 @@ export type AgentDefinitionInput = {
   description?: string;
   model?: string;
   proactive?: AgentProactiveInput;
-  connectors?: readonly string[];
-  duckdbPath?: string;
+  connectors?: readonly AgentConnectorInput[];
   runtime?: AgentRuntime;
   quietHours?: QuietHoursInput;
   session?: {
@@ -205,8 +228,7 @@ export type AgentDefinition = Readonly<{
   description?: string;
   model?: string;
   proactive?: AgentProactive;
-  connectors?: readonly string[];
-  duckdbPath?: string;
+  connectors?: readonly AgentConnector[];
   runtime?: AgentRuntime;
   quietHours?: QuietHours;
   session?: Readonly<{
@@ -350,17 +372,50 @@ function normalizeQuietHours(value: QuietHoursInput, label: string): QuietHours 
   };
 }
 
-function normalizeStringList(
-  values: readonly string[] | undefined,
+function normalizeConnector(
+  connector: AgentConnectorInput,
   label: string,
-): readonly string[] | undefined {
+): AgentConnector {
+  if (connector.type === "duckdb") {
+    return {
+      type: "duckdb",
+      path: normalizeRequiredString(connector.path, `${label}.path`),
+    };
+  }
+
+  if (connector.type === "knowledge-docs") {
+    return {
+      type: "knowledge-docs",
+    };
+  }
+
+  throw new Error(`${label}.type must be one of: duckdb, knowledge-docs`);
+}
+
+function normalizeConnectors(
+  values: readonly AgentConnectorInput[] | undefined,
+  label: string,
+): readonly AgentConnector[] | undefined {
   if (!values) {
     return undefined;
   }
 
-  const normalized = Array.from(
-    new Set(values.map((value) => normalizeRequiredString(value, label))),
-  );
+  const normalized: AgentConnector[] = [];
+  const seenTypes = new Set<string>();
+
+  for (const [index, connector] of values.entries()) {
+    const entryLabel = `${label}[${index}]`;
+    const normalizedConnector = normalizeConnector(connector, entryLabel);
+    if (seenTypes.has(normalizedConnector.type)) {
+      throw new Error(
+        `${entryLabel} duplicates connector type "${normalizedConnector.type}"`,
+      );
+    }
+
+    seenTypes.add(normalizedConnector.type);
+    normalized.push(normalizedConnector);
+  }
+
   return normalized.length > 0 ? normalized : undefined;
 }
 
@@ -466,6 +521,17 @@ export function defineConfig(input: FrameworkConfigInput): FrameworkConfig {
 }
 
 export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
+  if (
+    Object.prototype.hasOwnProperty.call(
+      input as Record<string, unknown>,
+      "duckdbPath",
+    )
+  ) {
+    throw new Error(
+      'agent.duckdbPath has been removed; use connectors: [{ type: "duckdb", path: "<path>" }]',
+    );
+  }
+
   const id = normalizeRequiredString(input.id, "agent.id");
   const name = normalizeRequiredString(input.name, "agent.name");
   const description = normalizeOptionalString(input.description);
@@ -474,8 +540,7 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
   const quietHours = input.quietHours
     ? normalizeQuietHours(input.quietHours, `agent(${id}).quietHours`)
     : undefined;
-  const connectors = normalizeStringList(input.connectors, `agent(${id}).connectors`);
-  const duckdbPath = normalizeOptionalString(input.duckdbPath);
+  const connectors = normalizeConnectors(input.connectors, `agent(${id}).connectors`);
 
   const tools = Array.from(
     new Set(input.tools.map((tool) => normalizeRequiredString(tool, `agent(${id}).tools`))),
@@ -535,7 +600,6 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
     ...(model ? { model } : {}),
     ...(proactive ? { proactive } : {}),
     ...(connectors ? { connectors } : {}),
-    ...(duckdbPath ? { duckdbPath } : {}),
     ...(runtime ? { runtime } : {}),
     ...(quietHours ? { quietHours } : {}),
     ...(input.session
