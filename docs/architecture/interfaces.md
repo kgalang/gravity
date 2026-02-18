@@ -8,12 +8,8 @@ Keep moving parts explicit and replaceable.
 - `defineConfig` / `defineAgent` contracts (`agents/contracts.ts`): canonical code-defined configuration and agent declaration authoring model.
 - `AgentRegistry` (`agents/index.ts`): typed registry assembly with duplicate `agentId` and slash-command collision guards.
 - `CompiledAgentDeclarations` (`agents/index.ts`): code-defined ingress/proactive/session declarations compiled from `defineConfig` + `defineAgent` contracts for runtime cutover.
-- `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): legacy slash resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 3; targeted for removal in CP5.1 Step 6.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
-- `TriggerNormalizer` (`src/runtime/trigger-normalizer.ts`): legacy trigger-normalization seam targeted for removal in CP5.1 once typed trigger dimensions are emitted directly at ingress/proactive boundaries.
-- `AgentConfig` (`src/runtime/agent-config.ts`): legacy JSONB config normalization seam targeted for removal in CP5.1.
 - `AgentSpecRepository`: transitional repository seam while behavior source moves off `gravity.agents.config`.
-- `IngressBindingResolver`: legacy ingress-binding resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 3; targeted for removal in CP5.1 Step 6.
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
 - `SessionKeyBuilder` (`src/runtime/session-key.ts`): canonical builders for mode-dependent session key patterns across slash, message, and proactive entrypoints.
 - `SessionResolver`: resolves `sessionKey` and session mode (`thread`, `main`, `isolated`) per trigger.
@@ -29,8 +25,14 @@ Keep moving parts explicit and replaceable.
 - `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
 - `ExecutorManager` (`src/runtime/executor-manager.ts`): single executor dispatch seam for all tool execution with per-agent runtime selection (`host` default, sandbox scaffold disabled).
 - `ToolDispatcher`: single dispatch seam for all tool execution (implemented through `ExecutorManager` in current runtime).
-- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): legacy proactive resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 4; targeted for removal in CP5.1 Step 6.
 - `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
+
+## Removed Legacy Seams (CP5.1 Step 6)
+- `src/runtime/agent-config.ts`
+- `src/runtime/ingress-binding-resolver.ts`
+- `src/runtime/proactive-trigger-resolver.ts`
+- `src/runtime/slash-command-router.ts`
+- `src/runtime/trigger-normalizer.ts`
 
 ## Non-Goals for Current Bootstrap
 - No full multi-surface adapter set beyond Slack yet.
@@ -39,7 +41,7 @@ Keep moving parts explicit and replaceable.
 - No sandbox enforcement yet.
 
 ## Ownership and Rollback Notes
-- Legacy seam notes (`SlashCommandRouter`, `TriggerNormalizer`, `AgentConfig`, `IngressBindingResolver`, `ProactiveTriggerResolver`) apply only until CP5.1 rearchitecture parity is complete; after removal, rollback is by revision revert.
+- Legacy seam rollback: removed CP5.1 seams are restored only via revision revert.
 - `DbClient` owner: platform runtime layer.
 - `DbClient` rollback path: swap `src/runtime/db.ts` back to direct `pg` access while preserving SQL contracts and migration files.
 - `SlackTransport` owner: platform runtime layer.
@@ -48,14 +50,10 @@ Keep moving parts explicit and replaceable.
 - `defineConfig` / `defineAgent` rollback path: revert `agents/contracts.ts` to previous declaration shape while preserving required IDs (`agentId`, `sessionKey`, `runId`) in downstream runtime contracts.
 - `AgentRegistry` owner: platform runtime layer.
 - `AgentRegistry` rollback path: pin `agents/index.ts` to previous known-good declarations and keep DB projection unchanged.
-- `TriggerNormalizer` owner: platform runtime layer.
-- `TriggerNormalizer` rollback path: temporarily route Slack ingress directly to runtime handlers while preserving run lifecycle and stable IDs.
 - `EventIdempotencyGuard` owner: platform runtime layer.
 - `EventIdempotencyGuard` rollback path: disable runtime pre-run duplicate checks and rely on `gravity.runs.source_event_id` uniqueness only.
 - `SessionKeyBuilder` owner: platform runtime layer.
 - `SessionKeyBuilder` rollback path: revert session-key builders to previous deterministic patterns while preserving DB session metadata and stable IDs.
-- `AgentConfig` owner: platform runtime layer.
-- `AgentConfig` rollback path: parse minimally typed config directly in repository/runtime call sites while preserving `gravity.agents.config` JSON shape.
 - `AgentSpecRepository` owner: platform runtime layer.
 - `AgentSpecRepository` rollback path: read minimal agent fields directly from `gravity.agents` and ignore advanced config blocks.
 - `SessionResolver` owner: platform runtime layer.

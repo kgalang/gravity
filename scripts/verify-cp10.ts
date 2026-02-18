@@ -3,7 +3,6 @@ import {
   createDb,
   destroyDb,
   gravitySchema,
-  type GravityDatabase,
 } from "../src/runtime/db.js";
 import {
   createKyselyRunLogRepository,
@@ -16,16 +15,12 @@ import {
 import {
   createProactiveTriggerScheduler,
   type ProactiveTriggerFireEvent,
+  type ResolvedProactiveTrigger,
 } from "../src/runtime/proactive-trigger-scheduler.js";
 
 const TARGET_AGENT_ID = "data-analyst";
 const VERIFY_HEARTBEAT_TRIGGER_ID = "cp10-verify-heartbeat";
 const VERIFY_CRON_TRIGGER_ID = "cp10-verify-cron";
-
-type AgentRow = {
-  id: string;
-  config: Record<string, unknown>;
-};
 
 type PersistedRunRow = {
   source_event_id: string | null;
@@ -48,78 +43,74 @@ function assert(condition: unknown, message: string): asserts condition {
   }
 }
 
-function buildVerificationConfig(input: {
-  base: Record<string, unknown>;
-  quietHoursEnabled: boolean;
-}): Record<string, unknown> {
-  const quietHours = input.quietHoursEnabled
+function buildVerificationTriggers(
+  quietHoursEnabled: boolean,
+): ReadonlyArray<ResolvedProactiveTrigger> {
+  const quietHours = quietHoursEnabled
     ? {
-        enabled: true,
         timezone: "UTC",
         startHour: 0,
         endHour: 0,
       }
     : undefined;
 
-  return {
-    ...input.base,
-    proactiveTriggers: [
-      {
-        id: VERIFY_CRON_TRIGGER_ID,
-        kind: "cron",
-        schedule: "*/5 * * * *",
-        prompt: "CP10 verification cron trigger",
-        sessionMode: "isolated",
-        delivery: {
-          surface: "slack",
-          mode: "channel_thread",
-          channelId: "C_CP10_VERIFY",
-        },
-        enabled: true,
+  return [
+    {
+      agentId: TARGET_AGENT_ID,
+      triggerId: VERIFY_CRON_TRIGGER_ID,
+      kind: "cron",
+      schedule: "*/5 * * * *",
+      prompt: "CP10 verification cron trigger",
+      sessionMode: "isolated",
+      delivery: {
+        surface: "slack",
+        mode: "channel_thread",
+        channelId: "C_CP10_VERIFY",
       },
-      {
-        id: VERIFY_HEARTBEAT_TRIGGER_ID,
-        kind: "heartbeat",
-        intervalSeconds: 300,
-        prompt: "CP10 verification heartbeat trigger",
-        sessionMode: "main",
-        delivery: {
-          surface: "slack",
-          mode: "dm",
-          userId: "U_CP10_VERIFY",
-        },
-        enabled: true,
+      ...(quietHours ? { quietHours } : {}),
+    },
+    {
+      agentId: TARGET_AGENT_ID,
+      triggerId: VERIFY_HEARTBEAT_TRIGGER_ID,
+      kind: "heartbeat",
+      intervalSeconds: 300,
+      prompt: "CP10 verification heartbeat trigger",
+      sessionMode: "main",
+      delivery: {
+        surface: "slack",
+        mode: "dm",
+        userId: "U_CP10_VERIFY",
       },
-    ],
-    policy: quietHours ? { quietHours } : {},
-  };
+      ...(quietHours ? { quietHours } : {}),
+    },
+  ];
 }
 
-async function loadAgentRow(
+async function ensureTargetAgentExists(
   db: ReturnType<typeof createDb>,
-): Promise<AgentRow> {
+): Promise<void> {
   const row = await gravitySchema(db)
     .selectFrom("agents")
-    .select(["id", "config"])
+    .select(["id"])
     .where("id", "=", TARGET_AGENT_ID)
     .executeTakeFirst();
 
   if (!row) {
     throw new Error(`Agent ${TARGET_AGENT_ID} not found`);
   }
-
-  return row as AgentRow;
 }
 
-async function updateAgentConfig(
+async function isTargetAgentActive(
   db: ReturnType<typeof createDb>,
-  config: Record<string, unknown>,
-): Promise<void> {
-  await gravitySchema(db)
-    .updateTable("agents")
-    .set({ config })
+): Promise<boolean> {
+  const row = await gravitySchema(db)
+    .selectFrom("agents")
+    .select(["id"])
     .where("id", "=", TARGET_AGENT_ID)
+    .where("status", "=", "active")
     .executeTakeFirst();
+
+  return Boolean(row);
 }
 
 function buildProactiveSourceEventId(triggerId: string, firedAt: Date): string {
@@ -246,10 +237,10 @@ async function main(): Promise<void> {
   );
 
   const db = createDb(databaseUrl);
-  const baselineAgent = await loadAgentRow(db);
-  const baselineConfig = baselineAgent.config;
+  await ensureTargetAgentExists(db);
 
   let currentNow = new Date("2026-02-18T10:20:00.000Z");
+  let quietHoursEnabled = false;
   const capturedEvents: ProactiveTriggerFireEvent[] = [];
   const knownSourceEventIds = new Set<string>();
 
@@ -280,16 +271,16 @@ async function main(): Promise<void> {
       firedAt: replaySeedTimes[1],
     });
 
-    await updateAgentConfig(
-      db,
-      buildVerificationConfig({
-        base: baselineConfig,
-        quietHoursEnabled: false,
-      }),
-    );
-
     const scheduler = createProactiveTriggerScheduler({
       db,
+      loadTriggers: async (runtimeDb) => {
+        const active = await isTargetAgentActive(runtimeDb);
+        if (!active) {
+          return [];
+        }
+
+        return buildVerificationTriggers(quietHoursEnabled);
+      },
       now: () => new Date(currentNow),
       enableReplay: true,
       replayLookbackHours: 6,
@@ -326,13 +317,7 @@ async function main(): Promise<void> {
       "Expected dm replay delivery",
     );
 
-    await updateAgentConfig(
-      db,
-      buildVerificationConfig({
-        base: baselineConfig,
-        quietHoursEnabled: true,
-      }),
-    );
+    quietHoursEnabled = true;
     await scheduler.reload();
 
     currentNow = new Date("2026-02-18T10:40:00.000Z");
@@ -410,7 +395,6 @@ async function main(): Promise<void> {
       `[cp10] verification passed (replay=${replayEvents.length}, manual=1, quiet_hours_suppressed=true)`,
     );
   } finally {
-    await updateAgentConfig(db, baselineConfig);
     await destroyDb(db);
   }
 }

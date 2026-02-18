@@ -3,7 +3,6 @@ import { type Static, type TSchema, Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { SocketModeClient } from "@slack/socket-mode";
 import { WebClient } from "@slack/web-api";
-import { normalizeSlashCommand } from "./slash-command-router.js";
 
 export type SlackSurface = "app_mention" | "message";
 export type SlackCommandSurface = "slash_command";
@@ -90,6 +89,10 @@ type SlackSlashCommandBody = Static<typeof SlackSlashCommandBodySchema>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+export function normalizeSlashCommand(command: string): string {
+  return command.trim().toLowerCase();
 }
 
 function parseSocketEnvelope(value: unknown): SocketEnvelope | null {

@@ -75,7 +75,7 @@ Gate:
 - `npm run check`
 
 ### Step 6 - Remove JSONB-driven legacy modules
-Status: next
+Status: complete
 
 Deliverables:
 - Remove the following modules after cutovers are fully wired:
@@ -90,7 +90,7 @@ Gate:
 - `npm run check`
 
 ### Step 7 - Prove parity + close docs/checkpoints
-Status: pending
+Status: next
 
 Deliverables:
 - Verify CP5/CP10 harness parity and live smoke matrix.
@@ -125,6 +125,13 @@ Gate:
 - Added `src/runtime/executor-manager.ts` as a single `Executor` seam for tool execution with per-agent runtime selection (`host` default, `sandbox` scaffold disabled).
 - Wired `src/runtime/pi-agent-runner.ts` tool binding through `ExecutorManager.resolve(runtime)` instead of direct tool construction, and wired runtime policy selection in `src/index.ts` via `agentRegistry` declarations.
 - Added `tests/runtime/executor-manager.test.ts` coverage for host runtime resolution and fail-closed sandbox behavior.
+- Removed legacy modules from runtime:
+  - `src/runtime/agent-config.ts`
+  - `src/runtime/ingress-binding-resolver.ts`
+  - `src/runtime/proactive-trigger-resolver.ts`
+  - `src/runtime/slash-command-router.ts`
+  - `src/runtime/trigger-normalizer.ts`
+- Removed legacy unit tests tied to deleted modules and updated runtime paths/scripts to compile and run without those seams.
 
 ## Parity Matrix (Required)
 - Slash command routing + ack behavior parity.

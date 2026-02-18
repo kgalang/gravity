@@ -24,17 +24,18 @@ import {
 } from "./runtime/pi-agent-runner.js";
 import {
   createProactiveTriggerScheduler,
+  type ProactiveQuietHours,
   type ProactiveTriggerFireEvent,
   type ProactiveTriggerScheduler,
+  type ResolvedProactiveTrigger,
 } from "./runtime/proactive-trigger-scheduler.js";
-import type {
-  ProactiveQuietHours,
-  ResolvedProactiveTrigger,
-} from "./runtime/proactive-trigger-resolver.js";
 import {
   composeRunLifecycleLoggers,
   createConsoleRunLifecycleLogger,
   createRunContext,
+  type RunEntrypoint,
+  type RunSurface,
+  type RunTriggerKind,
   withRunLifecycle,
 } from "./runtime/run-lifecycle.js";
 import {
@@ -57,19 +58,25 @@ import {
 import {
   type InboundSlackMessage,
   type InboundSlackSlashCommand,
+  normalizeSlashCommand,
   type SlackSlashCommandAckResponse,
   SlackTransport,
 } from "./runtime/slack-transport.js";
-import {
-  normalizeSystemTrigger,
-  type NormalizedTrigger,
-} from "./runtime/trigger-normalizer.js";
+type NormalizedTrigger = {
+  triggerKind: RunTriggerKind;
+  surface: RunSurface;
+  entrypoint: RunEntrypoint;
+};
 
 process.loadEnvFile();
 
 const lifecycleLogger = createConsoleRunLifecycleLogger();
 
-const bootstrapTrigger = normalizeSystemTrigger();
+const bootstrapTrigger: NormalizedTrigger = {
+  triggerKind: "system",
+  surface: "system",
+  entrypoint: "system",
+};
 const bootstrapRunContext = createRunContext({
   agentId: "system-bootstrap",
   sessionKey: "system-bootstrap:main",
@@ -137,10 +144,6 @@ type MessageEntrypoint = CompiledMessageEntrypoint;
 
 function logDebug(event: string, payload: Record<string, unknown>): void {
   console.log(`[gravity][debug] ${event} ${JSON.stringify(payload)}`);
-}
-
-function normalizeSlashCommand(command: string): string {
-  return command.trim().toLowerCase();
 }
 
 function toNormalizedTrigger(
