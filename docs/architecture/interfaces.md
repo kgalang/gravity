@@ -15,6 +15,7 @@ Keep moving parts explicit and replaceable.
 - `AgentSpecRepository`: transitional repository seam while behavior source moves off `gravity.agents.config`.
 - `IngressBindingResolver`: legacy ingress-binding resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 3; targeted for removal in CP5.1 Step 6.
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
+- `SessionKeyBuilder` (`src/runtime/session-key.ts`): canonical builders for mode-dependent session key patterns across slash, message, and proactive entrypoints.
 - `SessionResolver`: resolves `sessionKey` and session mode (`thread`, `main`, `isolated`) per trigger.
 - `SessionCatalog`: stores and resolves session metadata in `gravity.sessions` (ownership, mode, status) while keeping full transcript/context in `workspace/` files.
 - `ConnectorRegistry`: resolves connector plugins (for example `duckdb`) and connector-specific context loading.
@@ -27,7 +28,7 @@ Keep moving parts explicit and replaceable.
 - `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
 - `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
 - `ToolDispatcher`: single dispatch seam for all tool execution (host now, sandbox later).
-- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): legacy proactive resolver seam targeted for removal in CP5.1.
+- `ProactiveTriggerResolver` (`src/runtime/proactive-trigger-resolver.ts`): legacy proactive resolver seam no longer used in `src/index.ts` runtime path after CP5.1 Step 4; targeted for removal in CP5.1 Step 6.
 - `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
 
 ## Non-Goals for Current Bootstrap
@@ -50,6 +51,8 @@ Keep moving parts explicit and replaceable.
 - `TriggerNormalizer` rollback path: temporarily route Slack ingress directly to runtime handlers while preserving run lifecycle and stable IDs.
 - `EventIdempotencyGuard` owner: platform runtime layer.
 - `EventIdempotencyGuard` rollback path: disable runtime pre-run duplicate checks and rely on `gravity.runs.source_event_id` uniqueness only.
+- `SessionKeyBuilder` owner: platform runtime layer.
+- `SessionKeyBuilder` rollback path: revert session-key builders to previous deterministic patterns while preserving DB session metadata and stable IDs.
 - `AgentConfig` owner: platform runtime layer.
 - `AgentConfig` rollback path: parse minimally typed config directly in repository/runtime call sites while preserving `gravity.agents.config` JSON shape.
 - `AgentSpecRepository` owner: platform runtime layer.
