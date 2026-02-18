@@ -2,7 +2,7 @@
 
 Status: active
 Owner: kevin + codex
-Last Updated: 2026-02-17
+Last Updated: 2026-02-18
 
 ## Goal
 Connect the runtime to Slack Socket Mode and route inbound channel messages to the correct agent using `gravity.agents.channel_id`.
@@ -11,16 +11,16 @@ Connect the runtime to Slack Socket Mode and route inbound channel messages to t
 CP3 will not depend on `@mariozechner/pi-mom` directly. We will copy/adapt implementation patterns from local `pi-mom` source into Gravity-native runtime modules and use compatible `pi-*` package dependencies (version-pinned).
 
 ## CP3 In/Out
-- In scope: Slack Socket Mode connection, `app_mention` ingestion, channel-to-agent routing, run lifecycle + run log writes, basic echo response.
+- In scope: Slack Socket Mode connection, `app_mention` + `message` ingestion (including DMs), channel-to-agent routing, run lifecycle + run log writes, basic echo response.
 - Out of scope: full Claude tool loop, compaction/session manager internals, events scheduler, sandbox enforcement.
 
 ## Work Items
 - [x] Add minimal runtime unit tests to establish CP3 safety rails.
 - [x] Add a run lifecycle logging wrapper with stable IDs (`runId`, `agentId`, `sessionKey`).
 - [x] Replace placeholder Slack channel IDs in `seed.sql` with real workspace channel IDs.
-- [ ] Add runtime dependencies aligned with the `pi-mom` implementation (`pi-*`, Slack SDKs, supporting libs) to `package.json` with pinned versions.
-- [ ] Copy/adapt minimal Slack loop pieces from `pi-mom` into `src/` (transport + queueing only).
-- [ ] Wire Slack Socket Mode connection and event ingestion.
+- [x] Add runtime dependencies aligned with the `pi-mom` implementation (`pi-*`, Slack SDKs, supporting libs) to `package.json` with pinned versions.
+- [x] Copy/adapt minimal Slack loop pieces from `pi-mom` into `src/` (transport + queueing only).
+- [x] Wire Slack Socket Mode connection and event ingestion (`app_mention` + `message` with channel-scoped queueing).
 - [ ] Implement `channel_id -> agentId` lookup from Postgres (`gravity.agents`).
 - [ ] Add run lifecycle-backed inserts/updates for `gravity.runs`.
 - [ ] Reply with a basic echo response to validate end-to-end routing.
