@@ -1,20 +1,18 @@
 import process from "node:process";
-import type { Kysely } from "kysely";
-import {
-  AgentRegistry,
-  type RoutedInboundSlackMessage,
-} from "./runtime/agent-registry.js";
 import { loadConfig } from "./runtime/config.js";
-import { createDb, destroyDb, type GravityDatabase } from "./runtime/db.js";
 import {
   createConsoleRunLifecycleLogger,
   createRunContext,
   withRunLifecycle,
 } from "./runtime/run-lifecycle.js";
 import {
-  type InboundSlackMessage,
+  type InboundSlackSlashCommand,
   SlackTransport,
 } from "./runtime/slack-transport.js";
+import {
+  createDefaultSlashCommandAgentMap,
+  resolveAgentIdForSlashCommand,
+} from "./runtime/slash-command-router.js";
 
 process.loadEnvFile();
 
@@ -28,7 +26,6 @@ const bootstrapRunContext = createRunContext({
 
 let livenessTicker: NodeJS.Timeout | null = null;
 let slackTransport: SlackTransport | null = null;
-let runtimeDb: Kysely<GravityDatabase> | null = null;
 let isShuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
@@ -47,11 +44,6 @@ async function shutdown(signal: string): Promise<void> {
     slackTransport = null;
   }
 
-  if (runtimeDb !== null) {
-    await destroyDb(runtimeDb);
-    runtimeDb = null;
-  }
-
   console.log(`[gravity] received ${signal}; shutdown complete`);
   process.exit(0);
 }
@@ -63,24 +55,22 @@ process.on("SIGTERM", () => {
   void shutdown("SIGTERM");
 });
 
-function logRoutedSlackMessage(message: RoutedInboundSlackMessage): void {
-  console.log(`[gravity] slack routed ${JSON.stringify(message)}`);
-}
+const slashCommandAgentMap = createDefaultSlashCommandAgentMap();
+const enableSlackMessageEvents = false;
 
-function createSlackInboundMessageHandler(
-  agentRegistry: AgentRegistry,
-): (message: InboundSlackMessage) => void {
-  return (message) => {
-    const routedMessage = agentRegistry.resolveInboundMessage(message);
-    if (!routedMessage) {
-      console.log(
-        `[gravity] slack inbound ignored (unmapped channelId=${message.channelId} sourceEventId=${message.sourceEventId})`,
-      );
-      return;
-    }
+function handleInboundSlashCommand(command: InboundSlackSlashCommand): void {
+  const agentId = resolveAgentIdForSlashCommand(
+    command.command,
+    slashCommandAgentMap,
+  );
+  if (!agentId) {
+    console.log(
+      `[gravity] slash command ignored (unmapped command=${command.command} sourceEventId=${command.sourceEventId})`,
+    );
+    return;
+  }
 
-    logRoutedSlackMessage(routedMessage);
-  };
+  console.log(`[gravity] slash routed ${JSON.stringify({ ...command, agentId })}`);
 }
 
 try {
@@ -93,15 +83,15 @@ try {
     console.log(`[gravity] database=${config.databaseUrl}`);
     console.log("[gravity] runtime scaffold active");
 
-    runtimeDb = createDb(config.databaseUrl);
-    const agentRegistry = new AgentRegistry(runtimeDb);
-    await agentRegistry.refresh();
-
     if (config.slackAppToken && config.slackBotToken) {
+      console.log(
+        "[gravity] slack trigger policy: slash commands only (app_mention/message disabled)",
+      );
       slackTransport = new SlackTransport({
         appToken: config.slackAppToken,
         botToken: config.slackBotToken,
-        onInboundMessage: createSlackInboundMessageHandler(agentRegistry),
+        enableMessageEvents: enableSlackMessageEvents,
+        onInboundSlashCommand: handleInboundSlashCommand,
       });
       await slackTransport.start();
     } else {
@@ -116,10 +106,6 @@ try {
     }, config.livenessIntervalSeconds * 1000);
   });
 } catch (error) {
-  if (runtimeDb !== null) {
-    await destroyDb(runtimeDb);
-    runtimeDb = null;
-  }
   const message =
     error instanceof Error ? error.message : "Unknown bootstrap failure";
   console.error(`[gravity] bootstrap failed: ${message}`);

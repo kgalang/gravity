@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { SocketModeClient } from "@slack/socket-mode";
 import { WebClient } from "@slack/web-api";
+import { normalizeSlashCommand } from "./slash-command-router.js";
 
 export type SlackSurface = "app_mention" | "message";
+export type SlackCommandSurface = "slash_command";
 
 export type InboundSlackMessage = {
   surface: SlackSurface;
@@ -14,13 +17,24 @@ export type InboundSlackMessage = {
   isDirectMessage: boolean;
 };
 
+export type InboundSlackSlashCommand = {
+  surface: SlackCommandSurface;
+  sourceEventId: string;
+  command: string;
+  text: string;
+  channelId: string;
+  userId: string;
+  triggerId: string | null;
+};
+
 type Acknowledge = () => Promise<void> | void;
 type QueuedWork = () => Promise<void>;
 
 type SocketEnvelope<EventPayload> = {
-  event: EventPayload;
+  event?: EventPayload;
   ack?: Acknowledge;
   body?: unknown;
+  envelope_id?: string;
 };
 
 type SlackAppMentionEvent = {
@@ -42,6 +56,14 @@ type SlackMessageEvent = {
   subtype?: string;
   bot_id?: string;
   client_msg_id?: string;
+};
+
+type SlackSlashCommandBody = {
+  command?: string;
+  text?: string;
+  channel_id?: string;
+  user_id?: string;
+  trigger_id?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -70,10 +92,11 @@ function extractSocketEvent<EventPayload>(payload: {
 
 export type SocketModeClientLike = {
   on(
-    eventName: "app_mention" | "message",
+    eventName: "app_mention" | "message" | "slash_commands",
     handler:
       | ((payload: SocketEnvelope<SlackAppMentionEvent>) => void | Promise<void>)
-      | ((payload: SocketEnvelope<SlackMessageEvent>) => void | Promise<void>),
+      | ((payload: SocketEnvelope<SlackMessageEvent>) => void | Promise<void>)
+      | ((payload: SocketEnvelope<SlackSlashCommandBody>) => void | Promise<void>),
   ): void;
   start(): Promise<void>;
   disconnect?: () => Promise<void>;
@@ -95,7 +118,11 @@ export type WebClientLike = {
 export type SlackTransportConfig = {
   appToken: string;
   botToken: string;
-  onInboundMessage: (message: InboundSlackMessage) => Promise<void> | void;
+  onInboundMessage?: (message: InboundSlackMessage) => Promise<void> | void;
+  onInboundSlashCommand?: (
+    command: InboundSlackSlashCommand,
+  ) => Promise<void> | void;
+  enableMessageEvents?: boolean;
   log?: (line: string) => void;
   socketClient?: SocketModeClientLike;
   webClient?: WebClientLike;
@@ -242,10 +269,42 @@ export function normalizeMessageEvent(
   };
 }
 
+export function normalizeSlashCommandBody(
+  body: SlackSlashCommandBody,
+  options?: { envelopeId?: string },
+): InboundSlackSlashCommand | null {
+  if (!body.command || !body.channel_id || !body.user_id) {
+    return null;
+  }
+
+  const normalizedCommand = normalizeSlashCommand(body.command);
+  if (normalizedCommand.length === 0) {
+    return null;
+  }
+
+  const text = (body.text ?? "").trim();
+  const triggerId = body.trigger_id?.trim() || null;
+  const envelopeId = options?.envelopeId?.trim();
+  const sourceEventId =
+    triggerId ?? envelopeId ?? `slash:${randomUUID().replace(/-/g, "")}`;
+
+  return {
+    surface: "slash_command",
+    sourceEventId,
+    command: normalizedCommand,
+    text,
+    channelId: body.channel_id,
+    userId: body.user_id,
+    triggerId,
+  };
+}
+
 export class SlackTransport {
   private readonly socketClient: SocketModeClientLike;
   private readonly webClient: WebClientLike;
   private readonly onInboundMessage: SlackTransportConfig["onInboundMessage"];
+  private readonly onInboundSlashCommand: SlackTransportConfig["onInboundSlashCommand"];
+  private readonly enableMessageEvents: boolean;
   private readonly log: (line: string) => void;
   private readonly queues = new Map<string, ChannelQueue>();
 
@@ -255,6 +314,8 @@ export class SlackTransport {
 
   constructor(config: SlackTransportConfig) {
     this.onInboundMessage = config.onInboundMessage;
+    this.onInboundSlashCommand = config.onInboundSlashCommand;
+    this.enableMessageEvents = config.enableMessageEvents ?? true;
     this.log = config.log ?? console.log;
     this.socketClient =
       config.socketClient ??
@@ -331,6 +392,9 @@ export class SlackTransport {
       "app_mention",
       async (payload: SocketEnvelope<SlackAppMentionEvent>) => {
         await this.safeAck(payload.ack);
+        if (!this.enableMessageEvents) {
+          return;
+        }
 
         const event = extractSocketEvent<SlackAppMentionEvent>(payload);
         if (!event) {
@@ -342,7 +406,7 @@ export class SlackTransport {
           return;
         }
 
-        this.enqueue(message);
+        this.enqueueMessage(message);
       },
     );
 
@@ -350,6 +414,9 @@ export class SlackTransport {
       "message",
       async (payload: SocketEnvelope<SlackMessageEvent>) => {
         await this.safeAck(payload.ack);
+        if (!this.enableMessageEvents) {
+          return;
+        }
 
         const event = extractSocketEvent<SlackMessageEvent>(payload);
         if (!event) {
@@ -363,7 +430,32 @@ export class SlackTransport {
           return;
         }
 
-        this.enqueue(message);
+        this.enqueueMessage(message);
+      },
+    );
+
+    this.socketClient.on(
+      "slash_commands",
+      async (payload: SocketEnvelope<SlackSlashCommandBody>) => {
+        await this.safeAck(payload.ack);
+
+        if (!this.onInboundSlashCommand) {
+          return;
+        }
+
+        const body = extractSocketEvent<SlackSlashCommandBody>(payload);
+        if (!body) {
+          return;
+        }
+
+        const command = normalizeSlashCommandBody(body, {
+          envelopeId: payload.envelope_id,
+        });
+        if (!command) {
+          return;
+        }
+
+        this.enqueueSlashCommand(command);
       },
     );
   }
@@ -378,14 +470,31 @@ export class SlackTransport {
     return queue;
   }
 
-  private enqueue(message: InboundSlackMessage): void {
+  private enqueueMessage(message: InboundSlackMessage): void {
+    if (!this.onInboundMessage) {
+      return;
+    }
+
     const queue = this.getQueue(message.channelId);
     queue.enqueue(async () => {
       try {
-        await this.onInboundMessage(message);
+        await this.onInboundMessage?.(message);
       } catch (error) {
         this.log(
           `[gravity] slack inbound handler failed (${message.sourceEventId}): ${normalizeErrorMessage(error)}`,
+        );
+      }
+    });
+  }
+
+  private enqueueSlashCommand(command: InboundSlackSlashCommand): void {
+    const queue = this.getQueue(command.channelId);
+    queue.enqueue(async () => {
+      try {
+        await this.onInboundSlashCommand?.(command);
+      } catch (error) {
+        this.log(
+          `[gravity] slack slash handler failed (${command.sourceEventId}): ${normalizeErrorMessage(error)}`,
         );
       }
     });
