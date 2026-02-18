@@ -13,6 +13,8 @@ import {
   type AgentSessionEvent,
   type ResourceLoader,
 } from "@mariozechner/pi-coding-agent";
+import { type Static, Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import type { Kysely } from "kysely";
 import { gravitySchema, type GravityDatabase } from "./db.js";
 
@@ -34,6 +36,17 @@ type LoadedDocument = {
   filePath: string;
   content: string;
 };
+
+const AgentAssistantMessageSchema = Type.Object(
+  {
+    role: Type.Optional(Type.String()),
+    content: Type.Optional(Type.Unknown()),
+    errorMessage: Type.Optional(Type.String()),
+  },
+  { additionalProperties: true },
+);
+
+type AgentAssistantMessage = Static<typeof AgentAssistantMessageSchema>;
 
 export type RunPiAgentTurnInput = {
   db: Kysely<GravityDatabase>;
@@ -59,6 +72,14 @@ function asStringOrNull(value: unknown): string | null {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseAssistantMessage(value: unknown): AgentAssistantMessage | null {
+  if (!Value.Check(AgentAssistantMessageSchema, value)) {
+    return null;
+  }
+
+  return value;
 }
 
 function resolvePathFromRepoRoot(inputPath: string): string {
@@ -478,12 +499,8 @@ export async function runPiAgentTurn(
       return;
     }
 
-    const candidateMessage = event.message as {
-      role?: string;
-      content?: unknown;
-      errorMessage?: string;
-    };
-    if (candidateMessage.role !== "assistant") {
+    const candidateMessage = parseAssistantMessage(event.message);
+    if (!candidateMessage || candidateMessage.role !== "assistant") {
       return;
     }
 

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { type Static, type TSchema, Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { SocketModeClient } from "@slack/socket-mode";
 import { WebClient } from "@slack/web-api";
 import { normalizeSlashCommand } from "./slash-command-router.js";
@@ -31,61 +33,79 @@ export type InboundSlackSlashCommand = {
   triggerId: string | null;
 };
 
-type Acknowledge = () => Promise<void> | void;
-type SlashCommandAcknowledge = (
-  response?: SlackSlashCommandAckResponse,
-) => Promise<void> | void;
 type QueuedWork = () => Promise<void>;
 
-type SocketEnvelope<
-  EventPayload,
-  AckType = Acknowledge,
-> = {
-  event?: EventPayload;
-  ack?: AckType;
-  body?: unknown;
-  envelope_id?: string;
-};
+const SocketEnvelopeSchema = Type.Object(
+  {
+    event: Type.Optional(Type.Unknown()),
+    ack: Type.Optional(Type.Unknown()),
+    body: Type.Optional(Type.Unknown()),
+    envelope_id: Type.Optional(Type.String()),
+  },
+  { additionalProperties: true },
+);
 
-type SlackAppMentionEvent = {
-  channel?: string;
-  user?: string;
-  text?: string;
-  ts?: string;
-  thread_ts?: string;
-  client_msg_id?: string;
-};
+const SlackAppMentionEventSchema = Type.Object(
+  {
+    channel: Type.Optional(Type.String()),
+    user: Type.Optional(Type.String()),
+    text: Type.Optional(Type.String()),
+    ts: Type.Optional(Type.String()),
+    thread_ts: Type.Optional(Type.String()),
+    client_msg_id: Type.Optional(Type.String()),
+  },
+  { additionalProperties: true },
+);
 
-type SlackMessageEvent = {
-  channel?: string;
-  user?: string;
-  text?: string;
-  ts?: string;
-  thread_ts?: string;
-  channel_type?: string;
-  subtype?: string;
-  bot_id?: string;
-  client_msg_id?: string;
-};
+const SlackMessageEventSchema = Type.Object(
+  {
+    channel: Type.Optional(Type.String()),
+    user: Type.Optional(Type.String()),
+    text: Type.Optional(Type.String()),
+    ts: Type.Optional(Type.String()),
+    thread_ts: Type.Optional(Type.String()),
+    channel_type: Type.Optional(Type.String()),
+    subtype: Type.Optional(Type.String()),
+    bot_id: Type.Optional(Type.String()),
+    client_msg_id: Type.Optional(Type.String()),
+  },
+  { additionalProperties: true },
+);
 
-type SlackSlashCommandBody = {
-  command?: string;
-  text?: string;
-  channel_id?: string;
-  user_id?: string;
-  trigger_id?: string;
-};
+const SlackSlashCommandBodySchema = Type.Object(
+  {
+    command: Type.Optional(Type.String()),
+    text: Type.Optional(Type.String()),
+    channel_id: Type.Optional(Type.String()),
+    user_id: Type.Optional(Type.String()),
+    trigger_id: Type.Optional(Type.String()),
+  },
+  { additionalProperties: true },
+);
+
+type SocketEnvelope = Static<typeof SocketEnvelopeSchema>;
+type SlackAppMentionEvent = Static<typeof SlackAppMentionEventSchema>;
+type SlackMessageEvent = Static<typeof SlackMessageEventSchema>;
+type SlackSlashCommandBody = Static<typeof SlackSlashCommandBodySchema>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function extractSocketEvent<EventPayload>(payload: {
+function parseSocketEnvelope(value: unknown): SocketEnvelope | null {
+  if (!Value.Check(SocketEnvelopeSchema, value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function extractSocketEvent<Schema extends TSchema>(payload: {
   event?: unknown;
   body?: unknown;
-}): EventPayload | null {
-  if (isRecord(payload.event)) {
-    return payload.event as EventPayload;
+}, schema: Schema): Static<Schema> | null {
+  if (Value.Check(schema, payload.event)) {
+    return payload.event;
   }
 
   if (!isRecord(payload.body)) {
@@ -93,22 +113,25 @@ function extractSocketEvent<EventPayload>(payload: {
   }
 
   const nestedEvent = payload.body.event;
-  if (isRecord(nestedEvent)) {
-    return nestedEvent as EventPayload;
+  if (Value.Check(schema, nestedEvent)) {
+    return nestedEvent;
   }
 
-  return payload.body as EventPayload;
+  if (Value.Check(schema, payload.body)) {
+    return payload.body;
+  }
+
+  return null;
+}
+
+function isCallable(value: unknown): value is (...args: unknown[]) => unknown {
+  return typeof value === "function";
 }
 
 export type SocketModeClientLike = {
   on(
     eventName: "app_mention" | "message" | "slash_commands",
-    handler:
-      | ((payload: SocketEnvelope<SlackAppMentionEvent>) => void | Promise<void>)
-      | ((payload: SocketEnvelope<SlackMessageEvent>) => void | Promise<void>)
-      | ((
-          payload: SocketEnvelope<SlackSlashCommandBody, SlashCommandAcknowledge>,
-        ) => void | Promise<void>),
+    handler: (payload: unknown) => void | Promise<void>,
   ): void;
   start(): Promise<void>;
   disconnect?: () => Promise<void>;
@@ -221,6 +244,48 @@ function buildSlashFallbackSourceEventId(input: {
     .slice(0, 32);
 
   return `slash:${fingerprint}`;
+}
+
+function createDefaultSocketModeClient(appToken: string): SocketModeClientLike {
+  const client = new SocketModeClient({ appToken });
+  return {
+    on(eventName, handler) {
+      client.on(eventName, (...args: unknown[]) => {
+        const payload = args[0];
+        return handler(payload);
+      });
+    },
+    async start() {
+      await client.start();
+    },
+    async disconnect() {
+      await client.disconnect();
+    },
+  };
+}
+
+function createDefaultWebClient(botToken: string): WebClientLike {
+  const client = new WebClient(botToken);
+  return {
+    auth: {
+      async test() {
+        const result = await client.auth.test({});
+        return {
+          user_id: typeof result.user_id === "string" ? result.user_id : null,
+        };
+      },
+    },
+    chat: {
+      async postMessage(args) {
+        const result = await client.chat.postMessage({
+          channel: args.channel,
+          text: args.text,
+          thread_ts: args.thread_ts,
+        });
+        return { ts: result.ts };
+      },
+    },
+  };
 }
 
 export function normalizeAppMentionEvent(
@@ -368,13 +433,8 @@ export class SlackTransport {
     this.enableMessageEvents = config.enableMessageEvents ?? true;
     this.log = config.log ?? console.log;
     this.socketClient =
-      config.socketClient ??
-      ((new SocketModeClient({
-        appToken: config.appToken,
-      }) as unknown) as SocketModeClientLike);
-    this.webClient =
-      config.webClient ??
-      ((new WebClient(config.botToken) as unknown) as WebClientLike);
+      config.socketClient ?? createDefaultSocketModeClient(config.appToken);
+    this.webClient = config.webClient ?? createDefaultWebClient(config.botToken);
   }
 
   async start(): Promise<void> {
@@ -453,13 +513,18 @@ export class SlackTransport {
 
     this.socketClient.on(
       "app_mention",
-      async (payload: SocketEnvelope<SlackAppMentionEvent>) => {
-        await this.safeAck(payload.ack);
+      async (payload) => {
+        const envelope = parseSocketEnvelope(payload);
+        if (!envelope) {
+          return;
+        }
+
+        await this.safeAck(envelope.ack);
         if (!this.enableMessageEvents) {
           return;
         }
 
-        const event = extractSocketEvent<SlackAppMentionEvent>(payload);
+        const event = extractSocketEvent(envelope, SlackAppMentionEventSchema);
         if (!event) {
           return;
         }
@@ -475,13 +540,18 @@ export class SlackTransport {
 
     this.socketClient.on(
       "message",
-      async (payload: SocketEnvelope<SlackMessageEvent>) => {
-        await this.safeAck(payload.ack);
+      async (payload) => {
+        const envelope = parseSocketEnvelope(payload);
+        if (!envelope) {
+          return;
+        }
+
+        await this.safeAck(envelope.ack);
         if (!this.enableMessageEvents) {
           return;
         }
 
-        const event = extractSocketEvent<SlackMessageEvent>(payload);
+        const event = extractSocketEvent(envelope, SlackMessageEventSchema);
         if (!event) {
           return;
         }
@@ -499,20 +569,23 @@ export class SlackTransport {
 
     this.socketClient.on(
       "slash_commands",
-      async (
-        payload: SocketEnvelope<SlackSlashCommandBody, SlashCommandAcknowledge>,
-      ) => {
-        const body = extractSocketEvent<SlackSlashCommandBody>(payload);
+      async (payload) => {
+        const envelope = parseSocketEnvelope(payload);
+        if (!envelope) {
+          return;
+        }
+
+        const body = extractSocketEvent(envelope, SlackSlashCommandBodySchema);
         if (!body) {
-          await this.safeSlashCommandAck(payload.ack);
+          await this.safeSlashCommandAck(envelope.ack);
           return;
         }
 
         const command = normalizeSlashCommandBody(body, {
-          envelopeId: payload.envelope_id,
+          envelopeId: envelope.envelope_id,
         });
         if (!command) {
-          await this.safeSlashCommandAck(payload.ack);
+          await this.safeSlashCommandAck(envelope.ack);
           return;
         }
 
@@ -527,7 +600,7 @@ export class SlackTransport {
           }
         }
 
-        await this.safeSlashCommandAck(payload.ack, ackResponse);
+        await this.safeSlashCommandAck(envelope.ack, ackResponse);
 
         if (!this.onInboundSlashCommand) {
           return;
@@ -578,10 +651,8 @@ export class SlackTransport {
     });
   }
 
-  private async safeAck(
-    ack: Acknowledge | undefined,
-  ): Promise<void> {
-    if (!ack) {
+  private async safeAck(ack: unknown): Promise<void> {
+    if (!isCallable(ack)) {
       return;
     }
 
@@ -595,10 +666,10 @@ export class SlackTransport {
   }
 
   private async safeSlashCommandAck(
-    ack: SlashCommandAcknowledge | undefined,
+    ack: unknown,
     response?: SlackSlashCommandAckResponse,
   ): Promise<void> {
-    if (!ack) {
+    if (!isCallable(ack)) {
       return;
     }
 
