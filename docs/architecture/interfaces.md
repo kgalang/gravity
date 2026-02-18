@@ -5,7 +5,7 @@ Keep moving parts explicit and replaceable.
 ## Runtime Interfaces (planned)
 - `DbClient` (`src/runtime/db.ts`): owns typed Postgres connectivity via Kysely and provides the `gravity` schema handle.
 - `SlackTransport` (`src/runtime/slack-transport.ts`): owns Slack Socket Mode connection, inbound event normalization, and channel-scoped message queueing.
-- `AgentRegistry`: reads agent definitions from Postgres and exposes `channelId -> agentId` routing.
+- `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): resolves per-agent slash commands (e.g. `/wiggs`) to stable `agentId` values.
 - `SessionStore`: manages per-session `log.jsonl` and `context.jsonl` files.
 - `SkillLoader`: loads shared + agent-specific skills from `store/` each turn (no caching).
 - `MemoryStore`: loads/writes `MEMORY.md` per agent.
@@ -15,7 +15,9 @@ Keep moving parts explicit and replaceable.
 - `Scheduler`: heartbeat and cron execution with target session behavior.
 
 ## Non-Goals for Current Bootstrap
-- No Slack reply behavior yet (transport + channel-to-agent routing are active for CP3).
+- No Slack reply behavior yet (slash command routing is active for CP3).
+- No non-slash agent triggering from `app_mention`/`message` events in the runtime path.
+- No channel-based `channel_id -> agentId` routing fallback in the runtime path.
 - No live Claude tool loop yet.
 - No sandbox enforcement yet.
 

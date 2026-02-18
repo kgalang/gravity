@@ -22,6 +22,7 @@
 - Cross-session search log: `workspace/{agent-id}/agent-log.jsonl`.
 
 ## Integration Targets
-- Slack Socket Mode routing from `channel_id` to `agentId` via `gravity.agents`.
+- Slack Socket Mode routing from slash commands (`/wiggs`, `/compliance`) to stable `agentId` values on the single router bot.
+- Non-slash triggers (`app_mention`, `message`) remain disabled until CP6/CP7 session and memory behavior is implemented and tested.
 - Claude API loop with compaction and tool-result truncation from `mvp_requirements.md`.
 - DuckDB connector at `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb` for Wiggs.

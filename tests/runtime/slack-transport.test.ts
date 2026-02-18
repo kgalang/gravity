@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   normalizeAppMentionEvent,
   normalizeMessageEvent,
+  normalizeSlashCommandBody,
   SlackTransport,
   type SocketModeClientLike,
   type WebClientLike,
@@ -13,14 +14,14 @@ function sleep(ms: number): Promise<void> {
 
 class FakeSocketModeClient implements SocketModeClientLike {
   private handlers = new Map<
-    "app_mention" | "message",
+    "app_mention" | "message" | "slash_commands",
     Array<(payload: unknown) => void | Promise<void>>
   >();
 
   started = false;
 
   on(
-    eventName: "app_mention" | "message",
+    eventName: "app_mention" | "message" | "slash_commands",
     handler: (payload: unknown) => void | Promise<void>,
   ): void {
     const current = this.handlers.get(eventName) ?? [];
@@ -37,7 +38,7 @@ class FakeSocketModeClient implements SocketModeClientLike {
   }
 
   async emit(
-    eventName: "app_mention" | "message",
+    eventName: "app_mention" | "message" | "slash_commands",
     payload: unknown,
   ): Promise<void> {
     const handlers = this.handlers.get(eventName) ?? [];
@@ -135,6 +136,72 @@ describe("normalizeMessageEvent", () => {
       text: "help me",
       isDirectMessage: true,
     });
+  });
+});
+
+describe("normalizeSlashCommandBody", () => {
+  it("normalizes slash command payloads", () => {
+    const normalized = normalizeSlashCommandBody({
+      command: " /WIGGS ",
+      text: "  top customers  ",
+      channel_id: "C123",
+      user_id: "U123",
+      trigger_id: "trigger-1",
+    });
+
+    expect(normalized).toEqual({
+      surface: "slash_command",
+      sourceEventId: "trigger-1",
+      command: "/wiggs",
+      text: "top customers",
+      channelId: "C123",
+      userId: "U123",
+      triggerId: "trigger-1",
+    });
+  });
+
+  it("returns null when required fields are missing", () => {
+    expect(
+      normalizeSlashCommandBody({
+        text: "missing command",
+        channel_id: "C123",
+        user_id: "U123",
+      }),
+    ).toBeNull();
+  });
+
+  it("falls back to envelope_id when trigger_id is missing", () => {
+    const normalized = normalizeSlashCommandBody(
+      {
+        command: "/wiggs",
+        text: "top customers",
+        channel_id: "C123",
+        user_id: "U123",
+      },
+      { envelopeId: "envelope-1" },
+    );
+
+    expect(normalized?.sourceEventId).toBe("envelope-1");
+    expect(normalized?.triggerId).toBeNull();
+  });
+
+  it("uses a generated fallback source event id when trigger_id and envelope_id are missing", () => {
+    const one = normalizeSlashCommandBody({
+      command: "/wiggs",
+      text: "top customers",
+      channel_id: "C123",
+      user_id: "U123",
+    });
+    const two = normalizeSlashCommandBody({
+      command: "/wiggs",
+      text: "top customers",
+      channel_id: "C123",
+      user_id: "U123",
+    });
+
+    expect(one?.sourceEventId).toMatch(/^slash:[a-f0-9]{32}$/);
+    expect(two?.sourceEventId).toMatch(/^slash:[a-f0-9]{32}$/);
+    expect(one?.sourceEventId).not.toBe(two?.sourceEventId);
   });
 });
 
@@ -240,5 +307,100 @@ describe("SlackTransport", () => {
 
     expect(ack).toHaveBeenCalledTimes(1);
     expect(onInboundMessage).not.toHaveBeenCalled();
+  });
+
+  it("acks but does not dispatch non-slash message events when message events are disabled", async () => {
+    const socket = new FakeSocketModeClient();
+    const web = new FakeWebClient("UBOT");
+    const onInboundMessage = vi.fn(async () => undefined);
+    const mentionAck = vi.fn(async () => undefined);
+    const messageAck = vi.fn(async () => undefined);
+
+    const transport = new SlackTransport({
+      appToken: "xapp-test",
+      botToken: "xoxb-test",
+      socketClient: socket,
+      webClient: web,
+      onInboundMessage,
+      enableMessageEvents: false,
+      log: () => {
+        // no-op for tests
+      },
+    });
+
+    await transport.start();
+
+    await socket.emit("app_mention", {
+      event: {
+        channel: "C123",
+        user: "U456",
+        text: "<@UBOT> hello",
+        ts: "1700000000.100",
+      },
+      ack: mentionAck,
+    });
+
+    await socket.emit("message", {
+      event: {
+        channel: "D123",
+        channel_type: "im",
+        user: "U456",
+        text: "hello",
+        ts: "1700000000.200",
+      },
+      ack: messageAck,
+    });
+
+    await sleep(10);
+
+    expect(mentionAck).toHaveBeenCalledTimes(1);
+    expect(messageAck).toHaveBeenCalledTimes(1);
+    expect(onInboundMessage).not.toHaveBeenCalled();
+  });
+
+  it("routes slash command payloads when handler is configured", async () => {
+    const socket = new FakeSocketModeClient();
+    const web = new FakeWebClient("UBOT");
+    const onInboundSlashCommand = vi.fn(async () => undefined);
+    const ack = vi.fn(async () => undefined);
+
+    const transport = new SlackTransport({
+      appToken: "xapp-test",
+      botToken: "xoxb-test",
+      socketClient: socket,
+      webClient: web,
+      onInboundSlashCommand,
+      enableMessageEvents: false,
+      log: () => {
+        // no-op for tests
+      },
+    });
+
+    await transport.start();
+
+    await socket.emit("slash_commands", {
+      body: {
+        command: "/wiggs",
+        text: "top customers",
+        channel_id: "C123",
+        user_id: "U123",
+        trigger_id: "trigger-1",
+      },
+      ack,
+    });
+
+    await sleep(10);
+
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(onInboundSlashCommand).toHaveBeenCalledTimes(1);
+    expect(onInboundSlashCommand.mock.calls[0]?.[0]).toEqual({
+      surface: "slash_command",
+      sourceEventId: "trigger-1",
+      command: "/wiggs",
+      text: "top customers",
+      channelId: "C123",
+      userId: "U123",
+      triggerId: "trigger-1",
+    });
   });
 });
