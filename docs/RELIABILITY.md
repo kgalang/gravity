@@ -4,6 +4,7 @@
 - Single process runtime.
 - Best-effort startup checks.
 - Run lifecycle wrapper emits typed events with stable IDs to the runtime log sink.
+- Source-event idempotency guard prevents duplicate slash/non-slash run execution in-process and checks persisted `gravity.runs.source_event_id`.
 - No durable job replay yet.
 
 ## Planned Reliability Contracts
@@ -14,4 +15,4 @@
 
 ## Immediate Next Work
 1. Add startup reconciliation checks before proactive behavior (CP10).
-2. Harden slash-command idempotency handling around repeated source event delivery.
+2. Add durable scheduler replay/reconciliation for cron and heartbeat triggers after restarts.

@@ -15,6 +15,7 @@ These docs are the canonical source of truth for architecture, execution status,
 - [Autonomy rollout ladder](policies/autonomy-ladder.md)
 - [Doc gardening policy](policies/doc-gardening.md)
 - [Bootstrap runbook](operations/runbook.md)
+- [Slack app setup](operations/slack-app-setup.md)
 - [Quality scorecard](QUALITY_SCORE.md)
 - [Reliability baseline](RELIABILITY.md)
 - [Security baseline](SECURITY.md)

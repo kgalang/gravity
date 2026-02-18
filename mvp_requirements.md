@@ -74,7 +74,7 @@ These are explicitly deferred — not forgotten, just not in the 24-hour build:
 - **Control plane UI.** No management dashboard. Agents are managed via config files and psql. The contracts for a future UI are in place (stable IDs, typed events, versioned config).
 - **Multi-user access control.** No channel allowlists or approval flows. Anyone in the Slack channel can talk to the agent.
 - **Production data.** Demo uses dbt's jaffle-shop test data (100 customers, 99 orders). At Mercury, swap the dbt project and everything else stays identical.
-- **Reliability hardening.** No idempotency keys, no restart reconciliation, no exponential backoff. Single process, single machine.
+- **Reliability hardening.** Basic source-event dedupe is implemented for inbound runs, but restart reconciliation and durable scheduler replay are still deferred. Single process, single machine.
 - **Personal agents.** MVP has shared team agents only. Per-employee agents are a future milestone.
 - **Rich control plane UI and workflow builder.**
 - **Complex policy DSL or policy compiler.**
@@ -506,9 +506,26 @@ CREATE TABLE gravity.agents (
     channel_id      TEXT,                         -- Slack channel this agent lives in (MVP: one active agent per channel)
     skills_path     TEXT,                         -- optional override; default convention is store/agents/{id}/skills/
     memory_path     TEXT,                         -- optional override; default convention is store/agents/{id}/memory/
-    config          JSONB NOT NULL DEFAULT '{}'::jsonb,  -- connectors, permissions, model params
+    config          JSONB NOT NULL DEFAULT '{}'::jsonb,  -- MVP runtime config (ingress, proactive triggers, delivery, capabilities, policy)
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Session metadata registry (transcripts remain in workspace/ files)
+CREATE TABLE gravity.sessions (
+    session_key       TEXT PRIMARY KEY,            -- stable session identifier used by runtime + run logs
+    agent_id          TEXT NOT NULL REFERENCES gravity.agents(id) ON DELETE RESTRICT,
+    mode              TEXT NOT NULL CHECK (mode IN ('thread', 'main', 'isolated')),
+    status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+    surface           TEXT CHECK (surface IN ('slack', 'system')),
+    channel_id        TEXT,
+    thread_ts         TEXT,
+    owner_user_id     TEXT,                        -- optional owner for DM-targeted proactive sessions
+    opened_by_trigger TEXT NOT NULL CHECK (opened_by_trigger IN ('message', 'cron', 'heartbeat', 'system')),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_activity_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    closed_at         TIMESTAMPTZ,
+    CHECK (closed_at IS NULL OR closed_at >= created_at)
 );
 
 -- Run history: every interaction logged
@@ -517,7 +534,10 @@ CREATE TABLE gravity.runs (
     agent_id        TEXT NOT NULL REFERENCES gravity.agents(id) ON DELETE RESTRICT,
     session_key     TEXT NOT NULL,                -- {agent-id}:{thread_ts}
     thread_ts       TEXT,                         -- Slack thread TS (nullable for non-Slack surfaces)
-    source          TEXT NOT NULL DEFAULT 'slack' CHECK (source IN ('slack', 'cron', 'heartbeat', 'system')),
+    trigger_kind    TEXT NOT NULL DEFAULT 'message' CHECK (trigger_kind IN ('message', 'cron', 'heartbeat', 'system')),
+    surface         TEXT NOT NULL DEFAULT 'slack' CHECK (surface IN ('slack', 'system')),
+    entrypoint      TEXT NOT NULL DEFAULT 'slash_command'
+                    CHECK (entrypoint IN ('slash_command', 'app_mention', 'thread_reply', 'direct_message', 'cron', 'heartbeat', 'system')),
     source_event_id TEXT,                         -- idempotency/dedupe key from source event
     channel_id      TEXT,
     user_id         TEXT,
@@ -566,6 +586,12 @@ CREATE INDEX idx_runs_session_started
 CREATE INDEX idx_skill_versions_agent_created
     ON gravity.skill_versions(agent_id, created_at DESC);
 
+CREATE INDEX idx_sessions_agent_last_activity
+    ON gravity.sessions(agent_id, last_activity_at DESC);
+
+CREATE INDEX idx_sessions_status_last_activity
+    ON gravity.sessions(status, last_activity_at DESC);
+
 -- Keep updated_at accurate on row updates
 CREATE OR REPLACE FUNCTION gravity.set_updated_at()
 RETURNS TRIGGER
@@ -585,6 +611,119 @@ CREATE TRIGGER trg_agents_set_updated_at
 -- Note: memory is file-based (MEMORY.md), not in Postgres.
 -- Agents search memory via grep. Structured memory in Postgres is a future enhancement.
 ```
+
+### Agent Config Framework (`gravity.agents.config`, MVP shape)
+
+For MVP, config is intentionally local and unversioned while we iterate quickly.
+Schema versioning can be added post-demo once the shape stabilizes.
+
+Single model source of truth for MVP:
+
+- `gravity.agents.model` is canonical for model selection.
+- `gravity.agents.config` should not define model fields.
+
+Config primitives:
+
+- `ingressBindings`: message entrypoints (`slash_command`, `app_mention`, `thread_reply`, `direct_message`).
+- `proactiveTriggers`: scheduler-owned trigger definitions (`cron`, `heartbeat`) with session mode and delivery target.
+- `deliveryDefaults`: fallback delivery when a specific trigger does not override delivery.
+- `capabilities`: connectors and tool policy.
+- `policy`: access constraints and quiet hours.
+
+```json
+{
+  "capabilities": {
+    "connectors": [
+      {
+        "id": "primary-duckdb",
+        "kind": "duckdb",
+        "config": {
+          "path": "/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb"
+        }
+      }
+    ],
+    "tools": {
+      "allow": ["read", "bash"],
+      "deny": []
+    }
+  },
+  "ingressBindings": [
+    {
+      "id": "slack-wiggs-slash",
+      "kind": "message",
+      "surface": "slack",
+      "entrypoint": "slash_command",
+      "match": { "command": "/wiggs" },
+      "sessionMode": "thread",
+      "enabled": true
+    },
+    {
+      "id": "slack-wiggs-mention",
+      "kind": "message",
+      "surface": "slack",
+      "entrypoint": "app_mention",
+      "sessionMode": "thread",
+      "enabled": true
+    },
+    {
+      "id": "slack-wiggs-thread",
+      "kind": "message",
+      "surface": "slack",
+      "entrypoint": "thread_reply",
+      "match": { "threadOwnedByAgent": true },
+      "sessionMode": "thread",
+      "enabled": true
+    }
+  ],
+  "proactiveTriggers": [
+    {
+      "id": "daily-metrics",
+      "kind": "cron",
+      "schedule": "0 9 * * *",
+      "sessionMode": "isolated",
+      "prompt": "Run the daily metrics check and summarize notable changes.",
+      "delivery": {
+        "surface": "slack",
+        "mode": "channel_thread",
+        "channelId": "C0AFKMMDV4J"
+      },
+      "enabled": true
+    },
+    {
+      "id": "founder-heartbeat",
+      "kind": "heartbeat",
+      "intervalSeconds": 1800,
+      "sessionMode": "main",
+      "prompt": "Check for anomalies and notify if action is needed.",
+      "delivery": {
+        "surface": "slack",
+        "mode": "dm",
+        "userId": "U123456"
+      },
+      "enabled": true
+    }
+  ],
+  "deliveryDefaults": {
+    "surface": "slack",
+    "mode": "channel_thread",
+    "channelId": "C0AFKMMDV4J"
+  },
+  "policy": {
+    "access": {
+      "channelAllowlist": [],
+      "userAllowlist": []
+    },
+    "quietHours": null
+  }
+}
+```
+
+Default Slack behavior for MVP:
+
+- Slash commands, mentions, and thread replies can all trigger runs when enabled in `ingressBindings`.
+- Thread replies continue the same thread session.
+- Top-level mention or DM messages open/continue sessions according to configured `sessionMode`.
+- Proactive triggers (`cron`, `heartbeat`) default to `isolated` sessions unless explicitly set, and can deliver either to a channel thread or a specific user's DM.
 
 ---
 
@@ -695,8 +834,9 @@ Gravity's runtime is built by copying relevant source files from pi-mom (`/Users
 
 What it does:
 
-- Slack Socket Mode connection and message routing
-- Channel → agent routing (lookup from `gravity.agents`) and per-agent sequential message queuing
+- Slack Socket Mode connection and message routing (slash commands, app mentions, thread replies, DMs)
+- Normalizes ingress into trigger primitives (`message`, `cron`, `heartbeat`) plus surface context
+- Routes inbound events through `gravity.agents.config.ingressBindings`
 - Loads agent config, skills, and memory from `store/` — re-read every turn, never cached
 - Assembles context: system prompt + skills + memory + conversation history → Claude API call
 - Executes all tool calls (bash, read, write, edit, attach)
@@ -717,6 +857,11 @@ What it writes directly:
 
 Configuration:
 
+- Ingress binding: `gravity.agents.config.ingressBindings` (surface + entrypoint + session mode)
+- Proactive triggers: `gravity.agents.config.proactiveTriggers` (`cron` + `heartbeat`)
+- Delivery defaults: `gravity.agents.config.deliveryDefaults`
+- Connector/tool policy: `gravity.agents.config.capabilities`
+- Model selection: `gravity.agents.model` (single source of truth for MVP)
 - Skills loading: `store/shared/skills/` (global) + `store/agents/{agent-id}/skills/` (agent-specific)
 - Memory loading: `store/agents/{agent-id}/memory/`
 - Scratch workspace: `workspace/{agent-id}/`
@@ -727,7 +872,7 @@ Configuration:
 
 ## Proactive Behavior
 
-Agents don't just answer questions — they change the environment. Gravity supports two complementary proactive patterns, modeled on OpenClaw's event architecture (see `/Users/kevingalang/code/openclaw/src/infra/heartbeat-runner.ts` and `/Users/kevingalang/code/openclaw/src/cron/`):
+Agents don't just answer questions — they change the environment. Gravity models proactive behavior as `proactiveTriggers` with two kinds: `heartbeat` and `cron` (inspired by OpenClaw's event architecture: `/Users/kevingalang/code/openclaw/src/infra/heartbeat-runner.ts` and `/Users/kevingalang/code/openclaw/src/cron/`).
 
 ### Heartbeats
 
@@ -746,7 +891,7 @@ Precisely scheduled tasks that can run in isolated sessions. For things that nee
 
 - **Schedule kinds**: cron expressions (`"0 9 * * *"`), relative intervals (`"every 4h"`), or one-shot timestamps (`"at 2026-02-20T14:00:00"`)
 - **Session targets**: `"main"` (inject into main session, wake heartbeat) or `"isolated"` (fresh session, independent context)
-- **Delivery modes**: `"announce"` (post summary to channel), `"none"` (silent), or `"webhook"` (POST result externally)
+- **Delivery targets**: channel thread, user DM, silent/no-delivery, or webhook
 - **Error handling**: exponential backoff on failures, auto-cleanup of one-shot jobs
 
 ### MVP demo: daily metric check
@@ -755,14 +900,20 @@ For the demo, Wiggs runs a scheduled check on key metrics (revenue, order volume
 
 ```json
 {
-  "type": "cron",
+  "id": "daily-metrics",
+  "kind": "cron",
   "schedule": "0 9 * * *",
-  "session": "isolated",
-  "delivery": "announce",
-  "channel": "#ask-wiggs",
-  "prompt": "Run your daily metrics check. Compare revenue, order volume, and customer count to last week. Flag anything that changed more than 10%. Post a summary."
+  "sessionMode": "isolated",
+  "prompt": "Run your daily metrics check. Compare revenue, order volume, and customer count to last week. Flag anything that changed more than 10%. Post a summary.",
+  "delivery": {
+    "surface": "slack",
+    "mode": "channel_thread",
+    "channelId": "C0AFKMMDV4J"
+  }
 }
 ```
+
+For founder/operator monitoring, use a heartbeat trigger with `"delivery": { "surface": "slack", "mode": "dm", "userId": "<slack-user-id>" }`.
 
 For the live demo: either set the schedule to fire during the call window, or have a manual trigger ready (a "wake" command that fires the heartbeat immediately, like OpenClaw's wake handler).
 
@@ -784,7 +935,7 @@ Each checkpoint produces a verifiable working state. Evaluate before moving on �
 ### CP2: Infra running — Postgres + DuckDB ready
 
 - [ ] docker-compose.yml with Postgres
-- [ ] Schema applied (`gravity.agents`, `gravity.runs`, `gravity.skill_versions`)
+- [ ] Schema applied (`gravity.agents`, `gravity.sessions`, `gravity.runs`, `gravity.skill_versions`)
 - [ ] jaffle_shop_duckdb built — `duckdb jaffle_shop.duckdb "SELECT count(*) FROM customers"` returns 100
 - [ ] Seed agents inserted into `gravity.agents`
 
@@ -802,6 +953,7 @@ Each checkpoint produces a verifiable working state. Evaluate before moving on �
 ### CP4: End-to-end agent — Wiggs answers a question
 
 - [ ] Claude API wired into the agent loop
+- [ ] Ingress bindings enabled for non-slash Slack entrypoints (`app_mention`, `thread_reply`, DM `message`)
 - [ ] Skills loaded from `store/` into system prompt (re-read every turn, never cached)
 - [ ] DuckDB connector skill written (path to `.duckdb` file, CLI query syntax)
 - [ ] Query-patterns skill written (DuckDB SQL idioms, business question interpretation)
