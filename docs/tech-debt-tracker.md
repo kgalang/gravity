@@ -1,6 +1,6 @@
 # Tech Debt Tracker
 
-Last Updated: 2026-02-17
+Last Updated: 2026-02-18
 
 | ID | Debt Item | Impact | Planned Fix |
 | --- | --- | --- | --- |
@@ -8,3 +8,4 @@ Last Updated: 2026-02-17
 | TD-002 | Docker daemon dependency not validated in CI | Local setup drift can block CP2 | Add compose smoke job or documented fallback |
 | TD-003 | No CI migration smoke test yet | Migration regressions can slip until manual runtime checks | Add CI job for `npm run db:up && npm run db:migrate && npm run db:apply` |
 | TD-004 | `schema.sql` snapshot is maintained manually | Schema snapshot can drift from `db/migrations/` over time | Add a repo check that validates `schema.sql` matches migration output |
+| TD-005 | Shutdown path does not enforce best-effort process exit when Slack disconnect fails | Runtime can hang or exit non-deterministically during SIGINT/SIGTERM under socket/network failure | Wrap Slack transport stop in guarded shutdown logic (`try/finally`), log disconnect errors, and always complete process termination |
