@@ -1,4 +1,8 @@
 import {
+  compileAgentCapabilities,
+  type CompiledAgentCapabilities,
+} from "./capability-compiler.js";
+import {
   defineConfig,
   resolveAgentModel,
   resolveAgentQuietHours,
@@ -123,6 +127,7 @@ export type CompiledAgentDeclarations = Readonly<{
 export type RegisteredAgent = Readonly<{
   agentId: string;
   declaration: AgentDefinition;
+  compiledCapabilities: CompiledAgentCapabilities;
   model: string;
   runtime: AgentDefinition["runtime"] | FrameworkConfig["defaults"]["runtime"];
   defaultSessionMode: SessionMode;
@@ -141,14 +146,22 @@ function createRegisteredAgent(
   declaration: AgentDefinition,
   config: FrameworkConfig,
 ): RegisteredAgent {
+  const resources = declaration.resources ?? [];
+  const compiledCapabilities = compileAgentCapabilities({
+    resources,
+    useCapabilities: declaration.useCapabilities,
+  });
   const quietHours = resolveAgentQuietHours(declaration, config);
+  const effectiveQuietHours =
+    quietHours && quietHours.enabled === false ? undefined : quietHours;
   return {
     agentId: declaration.id,
     declaration,
+    compiledCapabilities,
     model: resolveAgentModel(declaration, config),
     runtime: resolveAgentRuntime(declaration, config),
     defaultSessionMode: resolveAgentSessionMode(declaration, config),
-    ...(quietHours ? { quietHours } : {}),
+    ...(effectiveQuietHours ? { quietHours: effectiveQuietHours } : {}),
   };
 }
 

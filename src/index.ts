@@ -47,7 +47,7 @@ import {
   buildIsolatedSessionKey,
   buildMessageSessionKey,
   buildProactiveSessionKey,
-  buildSlashThreadSessionKey,
+  buildSlashSessionKey,
 } from "./runtime/session-key.js";
 import {
   createKyselySessionCatalogRepository,
@@ -313,6 +313,7 @@ function buildUnmappedSlashCommandEchoResponse(
 
 type SlashCommandDecision = {
   agentId: string | null;
+  sessionMode: SessionMode | null;
   query: string;
   trigger: NormalizedTrigger | null;
   ackResponse: SlackSlashCommandAckResponse;
@@ -342,6 +343,7 @@ function resolveSlashCommandDecision(
   if (!compiledSlashListener) {
     return {
       agentId: null,
+      sessionMode: null,
       query,
       trigger: null,
       ackResponse: buildUnmappedSlashCommandEchoResponse(command),
@@ -367,6 +369,7 @@ function resolveSlashCommandDecision(
       : " all heartbeat triggers";
     return {
       agentId,
+      sessionMode: compiledSlashListener.sessionMode,
       query,
       trigger,
       manualWake,
@@ -379,6 +382,7 @@ function resolveSlashCommandDecision(
 
   return {
     agentId,
+    sessionMode: compiledSlashListener.sessionMode,
     query,
     trigger,
     ackResponse: buildSlashCommandEchoResponse(command, agentId),
@@ -427,7 +431,7 @@ async function loadActiveAgentIds(
 function toProactiveQuietHours(
   quietHours: typeof compiledDeclarations.proactive.triggers[number]["quietHours"],
 ): ProactiveQuietHours | undefined {
-  if (!quietHours) {
+  if (!quietHours || quietHours.enabled === false) {
     return undefined;
   }
 
@@ -993,9 +997,16 @@ async function handleInboundSlashCommand(
   const activeRunLogStore = runLogStore;
   const activeSlackTransport = slackTransport;
   const activeAgentId = decision.agentId;
+  const resolvedSessionMode = decision.sessionMode;
   const activeSessionCatalog = sessionCatalog;
   const normalizedTrigger = decision.trigger;
   const activeScheduler = proactiveTriggerScheduler;
+
+  if (!resolvedSessionMode) {
+    throw new Error(
+      `Slash command ${command.command} missing compiled session mode for agent ${activeAgentId}`,
+    );
+  }
 
   try {
     if (decision.manualWake) {
@@ -1074,7 +1085,13 @@ async function handleInboundSlashCommand(
       command.channelId,
       threadRootText,
     );
-    const sessionKey = buildSlashThreadSessionKey(activeAgentId, threadTs);
+    const sessionKey = buildSlashSessionKey({
+      agentId: activeAgentId,
+      channelId: command.channelId,
+      threadTs,
+      sourceEventId: command.sourceEventId,
+      sessionMode: resolvedSessionMode,
+    });
 
     logDebug("slash.session.init", {
       sourceEventId: command.sourceEventId,
@@ -1083,13 +1100,14 @@ async function handleInboundSlashCommand(
       channelId: command.channelId,
       threadTs,
       userId: command.userId,
+      sessionMode: resolvedSessionMode,
     });
 
     await ensureActiveSlackSession({
       catalog: activeSessionCatalog,
       sessionKey,
       agentId: activeAgentId,
-      mode: "thread",
+      mode: resolvedSessionMode,
       channelId: command.channelId,
       threadTs,
       ownerUserId: command.userId,
@@ -1113,6 +1131,7 @@ async function handleInboundSlashCommand(
         policyDecisions: {
           trigger: "slash_command",
           response_type: decision.ackResponse.response_type,
+          session_mode: resolvedSessionMode,
         },
       },
       onResponse: async (responseText) => {
@@ -1125,7 +1144,7 @@ async function handleInboundSlashCommand(
           catalog: activeSessionCatalog,
           sessionKey,
           agentId: activeAgentId,
-          mode: "thread",
+          mode: resolvedSessionMode,
           channelId: command.channelId,
           threadTs,
           ownerUserId: command.userId,

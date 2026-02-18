@@ -54,7 +54,7 @@ function assert(condition: unknown, message: string): asserts condition {
 function assertStoreConventions(repoRoot: string): void {
   const requiredDirectories = [
     "store/shared/skills",
-    "store/shared/connectors",
+    "store/shared/resources",
     "store/shared/knowledge",
     "store/agents/data-analyst/skills",
     "store/agents/data-analyst/memory",
@@ -62,6 +62,8 @@ function assertStoreConventions(repoRoot: string): void {
     "store/agents/compliance-helper/memory",
   ];
   const requiredFiles = [
+    "store/shared/skills/duckdb-query.md",
+    "store/shared/skills/knowledge-docs-review.md",
     "store/shared/skills/log-run.md",
     "store/shared/skills/query-gravity.md",
     "store/shared/skills/rollback.md",

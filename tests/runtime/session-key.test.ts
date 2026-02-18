@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSlashSessionKey,
   buildMessageSessionKey,
   buildProactiveSessionKey,
   buildSlashThreadSessionKey,
@@ -10,6 +11,56 @@ describe("buildSlashThreadSessionKey", () => {
     expect(
       buildSlashThreadSessionKey("data-analyst", "1740000000.123456"),
     ).toBe("data-analyst:1740000000.123456");
+  });
+});
+
+describe("buildSlashSessionKey", () => {
+  it("uses main mode pattern", () => {
+    expect(
+      buildSlashSessionKey({
+        agentId: "data-analyst",
+        channelId: "C123",
+        threadTs: "1740000000.123456",
+        sourceEventId: "slash:1",
+        sessionMode: "main",
+      }),
+    ).toBe("data-analyst:main");
+  });
+
+  it("uses isolated mode pattern", () => {
+    expect(
+      buildSlashSessionKey({
+        agentId: "data-analyst",
+        channelId: "C123",
+        threadTs: "1740000000.123456",
+        sourceEventId: "slash:2",
+        sessionMode: "isolated",
+      }),
+    ).toBe("data-analyst:slash:2");
+  });
+
+  it("uses thread mode pattern", () => {
+    expect(
+      buildSlashSessionKey({
+        agentId: "data-analyst",
+        channelId: "C123",
+        threadTs: "1740000000.123456",
+        sourceEventId: "slash:3",
+        sessionMode: "thread",
+      }),
+    ).toBe("data-analyst:1740000000.123456");
+  });
+
+  it("falls back to channel affinity key when threadTs is blank", () => {
+    expect(
+      buildSlashSessionKey({
+        agentId: "data-analyst",
+        channelId: "C123",
+        threadTs: "   ",
+        sourceEventId: "slash:4",
+        sessionMode: "thread",
+      }),
+    ).toBe("data-analyst:C123");
   });
 });
 

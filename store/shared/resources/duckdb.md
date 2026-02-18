@@ -1,4 +1,4 @@
-# Connector: DuckDB (Jaffle Shop)
+# Resource: DuckDB (Jaffle Shop)
 
 ## Path
 - `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb`

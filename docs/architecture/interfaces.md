@@ -14,10 +14,15 @@ Keep moving parts explicit and replaceable.
 - `SessionKeyBuilder` (`src/runtime/session-key.ts`): canonical builders for mode-dependent session key patterns across slash, message, and proactive entrypoints.
 - `SessionResolver`: resolves `sessionKey` and session mode (`thread`, `main`, `isolated`) per trigger.
 - `SessionCatalog`: stores and resolves session metadata in `gravity.sessions` (ownership, mode, status) while keeping full transcript/context in `workspace/` files.
-- `ConnectorRegistry`: resolves connector plugins (for example `duckdb`) and connector-specific context loading.
-- `SkillLoader`: loads shared + agent-specific skills from `store/` each turn (no caching).
+- `ResourcePlugin` (`src/resources/types.ts`): typed resource interface (`load(...)`) with discriminated resource specs and compile-time contribution contracts.
+- `ResourceRegistry` (`src/resources/registry.ts`): statically maps all resource kinds to plugins with exhaustive compile-time coverage checks and resolves per-turn resource contributions.
+- `CapabilityCatalog` (`agents/capability-catalog.ts`): canonical catalog of capability definitions (`resourceSlots`, `skills`, and tool grants).
+- `CapabilityBindingContract` (`agents/contracts.ts`): typed `useCapabilities[]` + `bindResources` agent contract with compile-time slot/resource-kind checks.
+- `CapabilityCompiler` (`agents/capability-compiler.ts`): compiles capability bindings into per-agent runtime capability profile (required skills/resources + tool grants).
+- `SkillResolver` (`src/runtime/context-assembler.ts`): resolves capability-derived shared skill IDs to shared skill markdown each turn (no caching).
+- `AgentLocalSkillOverlay` (`src/runtime/context-assembler.ts`): loader for `store/agents/{agentId}/skills/*.md` overlays.
 - `MemoryStore`: loads/writes `MEMORY.md` per agent.
-- `ContextAssembler`: builds per-turn system context from agent spec + skills + memory + connector context.
+- `ContextAssembler` (`src/runtime/context-assembler.ts`): builds per-turn system context from compiled capability profile + memory + resource contributions.
 - `TurnRunner` (`PiAgentRunner` for CP4): executes one model turn via `pi-coding-agent` and tool surface.
 - `DeliveryAdapter`: posts acknowledgements/final responses using surface-specific delivery defaults.
 - `SessionStore`: manages per-session `log.jsonl` and `context.jsonl` files.
@@ -60,8 +65,14 @@ Keep moving parts explicit and replaceable.
 - `SessionResolver` rollback path: revert to deterministic `sessionKey = {agentId}:{sourceEventId}` behavior.
 - `SessionCatalog` owner: platform runtime layer.
 - `SessionCatalog` rollback path: resolve sessions from `workspace/` path conventions only while preserving `gravity.sessions` schema for forward compatibility.
-- `ConnectorRegistry` owner: platform runtime layer.
-- `ConnectorRegistry` rollback path: hardcode a single connector path per agent in runtime code while preserving agent config columns.
+- `ResourceRegistry` owner: platform runtime layer.
+- `ResourceRegistry` rollback path: hardcode a single resource path per agent in runtime code while preserving agent config columns.
+- `CapabilityCompiler` owner: platform runtime layer.
+- `CapabilityCompiler` rollback path: inline capability expansion in runner/context code while preserving capability declarations in `agents/contracts.ts`.
+- `SkillResolver` owner: platform runtime layer.
+- `SkillResolver` rollback path: revert context assembly to direct shared skill loading while preserving capability-derived skill IDs.
+- `AgentLocalSkillOverlay` owner: platform runtime layer.
+- `AgentLocalSkillOverlay` rollback path: disable overlay loading and rely on shared skills only.
 - `ContextAssembler` owner: platform runtime layer.
 - `ContextAssembler` rollback path: inline context assembly in runner code while preserving per-turn reload semantics.
 - `RunLifecycleLogger` owner: platform runtime layer.

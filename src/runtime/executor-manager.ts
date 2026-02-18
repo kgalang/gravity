@@ -1,4 +1,5 @@
 import { createBashTool, createReadTool } from "@mariozechner/pi-coding-agent";
+import type { ToolPrimitive } from "../../agents/tool-primitives.js";
 
 export type ExecutorRuntime = "host" | "sandbox";
 
@@ -7,7 +8,10 @@ type PiTool = ReturnType<typeof createReadTool> | ReturnType<typeof createBashTo
 export type Executor = Readonly<{
   id: string;
   runtime: ExecutorRuntime;
-  createTools: (cwd: string) => PiTool[];
+  createTools: (
+    cwd: string,
+    allowedToolPrimitives: readonly ToolPrimitive[],
+  ) => PiTool[];
 }>;
 
 export type ExecutorManager = Readonly<{
@@ -23,7 +27,17 @@ function createHostExecutor(): Executor {
   return {
     id: "host",
     runtime: "host",
-    createTools: (cwd) => [createReadTool(cwd), createBashTool(cwd)],
+    createTools: (cwd, allowedToolPrimitives) => {
+      const allowedSet = new Set(allowedToolPrimitives);
+      const tools: PiTool[] = [];
+      if (allowedSet.has("read")) {
+        tools.push(createReadTool(cwd));
+      }
+      if (allowedSet.has("bash")) {
+        tools.push(createBashTool(cwd));
+      }
+      return tools;
+    },
   };
 }
 

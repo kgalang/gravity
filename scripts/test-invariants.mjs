@@ -410,7 +410,7 @@ function collectNestedGitDirs(startDir, relativePrefix = "") {
 function invariantStoreConventions() {
   const requiredDirectories = [
     "store/shared/skills",
-    "store/shared/connectors",
+    "store/shared/resources",
     "store/shared/knowledge",
     "store/agents",
   ];
@@ -421,6 +421,8 @@ function invariantStoreConventions() {
   }
 
   const requiredSharedSkills = [
+    "store/shared/skills/duckdb-query.md",
+    "store/shared/skills/knowledge-docs-review.md",
     "store/shared/skills/log-run.md",
     "store/shared/skills/query-gravity.md",
     "store/shared/skills/rollback.md",

@@ -45,5 +45,5 @@ SELECT id, name, status, channel_id FROM gravity.agents;
 ## Notes
 - `db/migrations/` is the source of truth for schema changes; `schema.sql` is a bootstrap snapshot.
 - `seed.sql` contains workspace-specific Slack `channel_id` values. Update them before applying in a different workspace.
-- Wiggs DuckDB connector path assumes local clone at `/Users/kevingalang/code/jaffle_shop_duckdb`.
+- Wiggs DuckDB resource path assumes local clone at `/Users/kevingalang/code/jaffle_shop_duckdb`.
 - Slack setup requirements (Socket Mode, scopes, events, App Home DM input, slash commands) are documented in `docs/operations/slack-app-setup.md`.

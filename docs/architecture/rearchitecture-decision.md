@@ -35,7 +35,7 @@ Core commitments:
 ### 1) Authoring Model + Source of Truth
 - Agent definitions: `agents/<agent-slug>/agent.ts`
 - Agent registry: `agents/index.ts`
-- Shared resources: `shared/`
+- Shared resources: `store/shared/`
 - Workspace runtime state: `workspace/`
 
 One-writer contract:
@@ -45,8 +45,10 @@ One-writer contract:
 
 Compatibility window for skills/memory paths:
 - Existing `store/` paths remain valid during this migration.
-- New code must support convention-first loading and avoid JSONB config dependency.
-- Final path consolidation (`store/` only vs full co-location) remains deferred.
+- Skill composition contract (2026-02-18 decision): canonical skill definitions live in `store/shared/skills`, and agents apply them via capability definitions referenced from `defineAgent(...).useCapabilities`.
+- `store/agents/{agentId}/skills` is a legacy bridge and is scheduled for removal in CP6 (no long-lived compatibility acceptance).
+- Memory remains agent-scoped at `store/agents/{agentId}/memory/MEMORY.md`.
+- Final path consolidation for memory/resources (`store/` only vs full co-location) remains deferred.
 
 ### 2) `defineConfig(...)` Minimum Contract
 `defineConfig` must support:
@@ -67,21 +69,23 @@ Required fields:
 - `id`
 - `name`
 - `listen`
-- `tools`
+- `useCapabilities`
 
 Expected optional fields:
 - `description`
 - `model`
 - `proactive`
-- `connectors`
+- `resources`
 - `runtime`
 - `quietHours`
 - `session`
 
-Connector config contract:
-- Connector-specific settings must be nested inside the connector declaration (`connectors` array).
-- Example: DuckDB path is declared as `connectors: [{ type: "duckdb", path: "<path>" }]`.
-- No top-level connector-specific fields are allowed in `defineAgent(...)`.
+Resource config contract:
+- Resource-specific settings must be nested inside the resource declaration (`resources` array).
+- Example: DuckDB path is declared as `resources: [{ id: "warehouse", kind: "duckdb", path: "<path>" }]`.
+- Capabilities are declared through `useCapabilities: [{ capability: "<capability-id>", bindResources?: { "<slot>": "<resource-id>" } }]`.
+- Capability definitions (catalog) own the skill set, required resource slots, and tool grants.
+- No top-level resource-specific fields are allowed in `defineAgent(...)`.
 
 Policy boundary:
 - Self-authoring may modify skills and memory files.
@@ -92,7 +96,7 @@ Gravity runtime owns:
 - Slack ingress/egress
 - Listener routing and agent resolution
 - Session key resolution and lifecycle
-- Context assembly (skills, memory, history, connector guidance)
+- Capability compilation + context assembly (capabilities, skills, memory, history, resource guidance)
 - Proactive scheduling (`cron`, `heartbeat`, manual wake)
 - Durable run and skill logging
 
@@ -146,7 +150,7 @@ Mandatory IDs across runtime flows and docs:
 - Code-defined agents as first-class runtime contracts
 - Control-plane-owned runtime flow
 - Executor seam as sandbox-ready boundary
-- Convention-first skills/memory discovery
+- Capability-first composition with shared-skill catalog + resource bindings
 - Removal of JSONB-driven legacy routing/resolver modules after parity
 
 ### Explicitly Deferred
@@ -160,7 +164,7 @@ Mandatory IDs across runtime flows and docs:
 1. Add `defineConfig` and `defineAgent` contracts plus `agents/index.ts` registry.
 2. Add a compile step that produces typed runtime declarations for ingress, proactive triggers, sessions, and trigger dimensions.
 3. Rewire Slack slash/message/proactive paths to consume compiled declarations.
-4. Rewire context assembly to code-defined agent sources (skills/memory/connectors).
+4. Rewire context assembly to code-defined agent sources (capabilities/skills/memory/resources).
 5. Prove parity via verification + smoke matrix.
 6. Delete legacy JSONB-driven modules (no long-lived dual path).
 
@@ -219,11 +223,14 @@ Answer: Use `{agentId}:{channelId}`.
 6. **How does rollback work after legacy-module deletion?**
 Answer: Rollback is deployment-level: revert to the pre-removal tagged revision while keeping durable schema/contracts unchanged (`gravity.runs`, `gravity.sessions`, `gravity.skill_versions`).
 
+7. **Should skills be split between shared files and agent-local folders as a long-term model?**
+Answer: No. Long-term model is shared-skill catalog + capability catalog + explicit agent capability bindings, and CP6 removes agent-local skill loading as an immediate migration gate.
+
 ## Deferred Questions for Downstream Implementers
 These are intentionally deferred. Each item includes trigger conditions and the default until decided.
 
-1. **Resource path end-state: keep `store/` as canonical vs full co-location under `agents/`?**
-Context: current repo conventions emphasize `store/`; refactor notes emphasize co-location.
+1. **Memory/resource path end-state: keep `store/` as canonical vs full co-location under `agents/`?**
+Context: skills are decided shared-first; memory/resources path end-state is still open.
 Trigger: decide before deleting compatibility loaders.
 Default until decided: support current `store/` + code-defined agents without forcing a path migration.
 
@@ -284,7 +291,7 @@ Control: this doc stays authoritative, `docs/README.md` links to it, and rollbac
 ## Engineer Takeover Checklist
 1. Read this document first.
 2. Read `docs/architecture/system-map.md` and `docs/architecture/interfaces.md` for current runtime topology.
-3. Read `docs/plans/active/2026-02-18-cp5-1-rearchitecture-parity.md` for active execution details.
+3. Read `docs/plans/active/2026-02-18-cp6-sessions-memory-scaffolding.md` for active execution details.
 4. Run `npm run check` and both verification harnesses (`npm run verify:cp5`, `npm run verify:cp10`).
 5. Confirm removed legacy modules do not exist/import anywhere in runtime paths.
 

@@ -1,3 +1,10 @@
+import {
+  capabilityCatalog,
+  type CapabilityId,
+  type CapabilitySkillId,
+} from "./capability-catalog.js";
+import type { ResourceKind } from "./resource-kinds.js";
+
 export type SessionMode = "thread" | "main" | "isolated";
 export type AgentRuntime = "host" | "sandbox";
 export type IngressEntrypoint =
@@ -178,41 +185,148 @@ export type AgentProactive = Readonly<{
   triggers: readonly AgentProactiveTrigger[];
 }>;
 
-export type DuckdbConnectorInput = {
-  type: "duckdb";
+export type DuckdbResourceInput = {
+  id: string;
+  kind: "duckdb";
   path: string;
 };
 
-export type KnowledgeDocsConnectorInput = {
-  type: "knowledge-docs";
+export type KnowledgeDocsResourceInput = {
+  id: string;
+  kind: "knowledge-docs";
 };
 
-export type AgentConnectorInput =
-  | DuckdbConnectorInput
-  | KnowledgeDocsConnectorInput;
+export type AgentResourceInput = DuckdbResourceInput | KnowledgeDocsResourceInput;
 
-export type DuckdbConnector = Readonly<{
-  type: "duckdb";
+export type DuckdbResource = Readonly<{
+  id: string;
+  kind: "duckdb";
   path: string;
 }>;
 
-export type KnowledgeDocsConnector = Readonly<{
-  type: "knowledge-docs";
+export type KnowledgeDocsResource = Readonly<{
+  id: string;
+  kind: "knowledge-docs";
 }>;
 
-export type AgentConnector = DuckdbConnector | KnowledgeDocsConnector;
+export type AgentResource = DuckdbResource | KnowledgeDocsResource;
+export type AgentResourceKind = ResourceKind;
+
+type CapabilitySlotMap<TCapabilityId extends CapabilityId> =
+  (typeof capabilityCatalog)[TCapabilityId]["resourceSlots"];
+
+type CapabilitySlotId<TCapabilityId extends CapabilityId> =
+  keyof CapabilitySlotMap<TCapabilityId> & string;
+
+type CapabilityBindShape<
+  TCapabilityId extends CapabilityId,
+  TResourceId extends string,
+> = CapabilitySlotId<TCapabilityId> extends never
+  ? Readonly<{
+      bindResources?: Readonly<Record<string, never>>;
+    }>
+  : Readonly<{
+      bindResources: Readonly<Record<CapabilitySlotId<TCapabilityId>, TResourceId>>;
+    }>;
+
+type CapabilityBindingFor<
+  TCapabilityId extends CapabilityId,
+  TResourceId extends string,
+> = Readonly<{
+  capability: TCapabilityId;
+}> &
+  CapabilityBindShape<TCapabilityId, TResourceId>;
+
+export type AgentCapabilityBindingInput<TResourceId extends string = string> = {
+  [TCapabilityId in CapabilityId]: CapabilityBindingFor<
+    TCapabilityId,
+    TResourceId
+  >;
+}[CapabilityId];
+
+export type AgentCapabilityBinding = Readonly<{
+  capability: CapabilityId;
+  bindResources: Readonly<Record<string, string>>;
+}>;
 
 type NonEmptyArray<T> = readonly [T, ...T[]];
 
-export type AgentDefinitionInput = {
+type ResourceIdUnion<TResources extends readonly AgentResourceInput[]> =
+  TResources[number]["id"];
+
+type ResourceKindForId<
+  TResources extends readonly AgentResourceInput[],
+  TResourceId extends ResourceIdUnion<TResources>,
+> = Extract<TResources[number], { id: TResourceId }>["kind"];
+
+type NormalizeResources<
+  TResources extends readonly AgentResourceInput[] | undefined,
+> = TResources extends readonly AgentResourceInput[] ? TResources : readonly [];
+
+type CapabilityBindingKindErrors<
+  TResources extends readonly AgentResourceInput[],
+  TBinding extends AgentCapabilityBindingInput<ResourceIdUnion<TResources>>,
+> = CapabilitySlotId<TBinding["capability"]> extends never
+  ? never
+  : {
+      [Slot in CapabilitySlotId<TBinding["capability"]>]: TBinding extends {
+        bindResources: Record<Slot, infer TResourceId>;
+      }
+        ? TResourceId extends ResourceIdUnion<TResources>
+          ? ResourceKindForId<TResources, TResourceId> extends CapabilitySlotMap<
+              TBinding["capability"]
+            >[Slot]
+            ? never
+            : `Capability "${TBinding["capability"]}" slot "${Slot}" requires resource kind "${CapabilitySlotMap<
+                TBinding["capability"]
+              >[Slot] & string}"`
+          : never
+        : `Capability "${TBinding["capability"]}" missing required binding for slot "${Slot}"`;
+    }[CapabilitySlotId<TBinding["capability"]>];
+
+type CapabilityBindingErrors<
+  TResources extends readonly AgentResourceInput[],
+  TCapabilities extends readonly AgentCapabilityBindingInput<
+    ResourceIdUnion<TResources>
+  >[],
+> = {
+  [Index in keyof TCapabilities]: TCapabilities[Index] extends AgentCapabilityBindingInput<
+    ResourceIdUnion<TResources>
+  >
+    ? CapabilityBindingKindErrors<TResources, TCapabilities[Index]>
+    : never;
+}[number];
+
+type CompileTimeCapabilityBindingGuard<
+  TResources extends readonly AgentResourceInput[],
+  TCapabilities extends readonly AgentCapabilityBindingInput<
+    ResourceIdUnion<TResources>
+  >[],
+> = CapabilityBindingErrors<TResources, TCapabilities> extends never
+  ? {}
+  : {
+      __compileTimeCapabilityBindingError__: CapabilityBindingErrors<
+        TResources,
+        TCapabilities
+      >;
+    };
+
+export type AgentDefinitionInput<
+  TResources extends readonly AgentResourceInput[] | undefined = undefined,
+  TCapabilities extends NonEmptyArray<
+    AgentCapabilityBindingInput<ResourceIdUnion<NormalizeResources<TResources>>>
+  > = NonEmptyArray<
+    AgentCapabilityBindingInput<ResourceIdUnion<NormalizeResources<TResources>>>
+  >,
+> = {
   id: string;
   name: string;
   listen: NonEmptyArray<AgentListenerInput>;
-  tools: NonEmptyArray<string>;
+  useCapabilities: TCapabilities;
   description?: string;
   model?: string;
   proactive?: AgentProactiveInput;
-  connectors?: readonly AgentConnectorInput[];
+  resources?: TResources;
   runtime?: AgentRuntime;
   quietHours?: QuietHoursInput;
   session?: {
@@ -224,17 +338,19 @@ export type AgentDefinition = Readonly<{
   id: string;
   name: string;
   listen: readonly AgentListener[];
-  tools: readonly string[];
+  useCapabilities: readonly AgentCapabilityBinding[];
   description?: string;
   model?: string;
   proactive?: AgentProactive;
-  connectors?: readonly AgentConnector[];
+  resources?: readonly AgentResource[];
   runtime?: AgentRuntime;
   quietHours?: QuietHours;
   session?: Readonly<{
     defaultMode?: SessionMode;
   }>;
 }>;
+
+export type { CapabilityId, CapabilitySkillId };
 
 function deepFreeze<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -372,51 +488,160 @@ function normalizeQuietHours(value: QuietHoursInput, label: string): QuietHours 
   };
 }
 
-function normalizeConnector(
-  connector: AgentConnectorInput,
+function normalizeResource(
+  resource: AgentResourceInput,
   label: string,
-): AgentConnector {
-  if (connector.type === "duckdb") {
+): AgentResource {
+  if (resource.kind === "duckdb") {
     return {
-      type: "duckdb",
-      path: normalizeRequiredString(connector.path, `${label}.path`),
+      id: normalizeRequiredString(resource.id, `${label}.id`),
+      kind: "duckdb",
+      path: normalizeRequiredString(resource.path, `${label}.path`),
     };
   }
 
-  if (connector.type === "knowledge-docs") {
+  if (resource.kind === "knowledge-docs") {
     return {
-      type: "knowledge-docs",
+      id: normalizeRequiredString(resource.id, `${label}.id`),
+      kind: "knowledge-docs",
     };
   }
 
-  throw new Error(`${label}.type must be one of: duckdb, knowledge-docs`);
+  throw new Error(`${label}.kind must be one of: duckdb, knowledge-docs`);
 }
 
-function normalizeConnectors(
-  values: readonly AgentConnectorInput[] | undefined,
+function normalizeResources(
+  values: readonly AgentResourceInput[] | undefined,
   label: string,
-): readonly AgentConnector[] | undefined {
+): readonly AgentResource[] | undefined {
   if (!values) {
     return undefined;
   }
 
-  const normalized: AgentConnector[] = [];
-  const seenTypes = new Set<string>();
+  const normalized: AgentResource[] = [];
+  const seenIds = new Set<string>();
 
-  for (const [index, connector] of values.entries()) {
+  for (const [index, resource] of values.entries()) {
     const entryLabel = `${label}[${index}]`;
-    const normalizedConnector = normalizeConnector(connector, entryLabel);
-    if (seenTypes.has(normalizedConnector.type)) {
+    const normalizedResource = normalizeResource(resource, entryLabel);
+
+    if (seenIds.has(normalizedResource.id)) {
       throw new Error(
-        `${entryLabel} duplicates connector type "${normalizedConnector.type}"`,
+        `${entryLabel} duplicates resource id "${normalizedResource.id}"`,
       );
     }
 
-    seenTypes.add(normalizedConnector.type);
-    normalized.push(normalizedConnector);
+    seenIds.add(normalizedResource.id);
+    normalized.push(normalizedResource);
   }
 
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeCapabilityBinding(
+  inputBinding: AgentCapabilityBindingInput<string>,
+  label: string,
+  resourceKindsById: ReadonlyMap<string, AgentResourceKind>,
+): AgentCapabilityBinding {
+  const capabilityId = inputBinding.capability;
+  const definition = capabilityCatalog[capabilityId];
+  if (!definition) {
+    const validCapabilities = Object.keys(capabilityCatalog).sort().join(", ");
+    throw new Error(`${label}.capability must be one of: ${validCapabilities}`);
+  }
+
+  const bindInput: Readonly<Record<string, string | undefined>> =
+    "bindResources" in inputBinding && inputBinding.bindResources
+      ? inputBinding.bindResources
+      : {};
+  const expectedSlotEntries = Object.entries(definition.resourceSlots).sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
+
+  const normalizedBind: Record<string, string> = {};
+
+  for (const [slot, expectedKind] of expectedSlotEntries) {
+    const rawResourceId = bindInput[slot];
+    if (rawResourceId === undefined) {
+      throw new Error(
+        `${label}.bindResources is missing required slot "${slot}" for capability "${capabilityId}"`,
+      );
+    }
+
+    const resourceId = normalizeRequiredString(
+      rawResourceId,
+      `${label}.bindResources.${slot}`,
+    );
+    const actualKind = resourceKindsById.get(resourceId);
+    if (!actualKind) {
+      throw new Error(
+        `${label}.bindResources.${slot} references unknown resource id "${resourceId}"`,
+      );
+    }
+    if (actualKind !== expectedKind) {
+      throw new Error(
+        `${label}.bindResources.${slot} requires resource kind "${expectedKind}" but received "${actualKind}"`,
+      );
+    }
+
+    normalizedBind[slot] = resourceId;
+  }
+
+  const expectedSlotSet = new Set(expectedSlotEntries.map(([slot]) => slot));
+  for (const slot of Object.keys(bindInput)) {
+    if (!expectedSlotSet.has(slot)) {
+      throw new Error(
+        `${label}.bindResources.${slot} is not a valid slot for capability "${capabilityId}"`,
+      );
+    }
+  }
+
+  return {
+    capability: capabilityId,
+    bindResources: normalizedBind,
+  };
+}
+
+function normalizeCapabilities(
+  values: readonly AgentCapabilityBindingInput<string>[],
+  label: string,
+  resources: readonly AgentResource[] | undefined,
+): readonly AgentCapabilityBinding[] {
+  if (values.length === 0) {
+    throw new Error("agent must declare at least one capability");
+  }
+
+  const resourceKindsById = new Map<string, AgentResourceKind>();
+  for (const resource of resources ?? []) {
+    resourceKindsById.set(resource.id, resource.kind);
+  }
+
+  const normalized: AgentCapabilityBinding[] = [];
+  const seenCapabilitySignatures = new Set<string>();
+
+  for (const [index, capability] of values.entries()) {
+    const entryLabel = `${label}[${index}]`;
+    const normalizedBinding = normalizeCapabilityBinding(
+      capability,
+      entryLabel,
+      resourceKindsById,
+    );
+    const signature = [
+      normalizedBinding.capability,
+      ...Object.entries(normalizedBinding.bindResources)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([slot, resourceId]) => `${slot}=${resourceId}`),
+    ].join("|");
+
+    if (seenCapabilitySignatures.has(signature)) {
+      throw new Error(`${entryLabel} duplicates capability binding "${signature}"`);
+    }
+
+    seenCapabilitySignatures.add(signature);
+    normalized.push(normalizedBinding);
+  }
+
+  return normalized;
 }
 
 function normalizeProactiveTrigger(
@@ -520,7 +745,15 @@ export function defineConfig(input: FrameworkConfigInput): FrameworkConfig {
   return deepFreeze(config);
 }
 
-export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
+export function defineAgent<
+  const TResources extends readonly AgentResourceInput[] | undefined,
+  const TCapabilities extends NonEmptyArray<
+    AgentCapabilityBindingInput<ResourceIdUnion<NormalizeResources<TResources>>>
+  >,
+>(
+  input: AgentDefinitionInput<TResources, TCapabilities> &
+    CompileTimeCapabilityBindingGuard<NormalizeResources<TResources>, TCapabilities>,
+): AgentDefinition {
   if (
     Object.prototype.hasOwnProperty.call(
       input as Record<string, unknown>,
@@ -528,8 +761,52 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
     )
   ) {
     throw new Error(
-      'agent.duckdbPath has been removed; use connectors: [{ type: "duckdb", path: "<path>" }]',
+      'agent.duckdbPath has been removed; use resources: [{ id: "warehouse", kind: "duckdb", path: "<path>" }]',
     );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      input as Record<string, unknown>,
+      "connectors",
+    )
+  ) {
+    throw new Error(
+      'agent.connectors has been renamed to resources: [{ id: "<id>", kind: "duckdb" | "knowledge-docs", ... }]',
+    );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      input as Record<string, unknown>,
+      "capabilities",
+    )
+  ) {
+    throw new Error(
+      'agent.capabilities has been renamed to useCapabilities: [{ capability: "<capability-id>", bindResources?: { "<slot>": "<resource-id>" } }]',
+    );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      input as Record<string, unknown>,
+      "tools",
+    )
+  ) {
+      throw new Error(
+      'agent.tools has been replaced by useCapabilities: [{ capability: "<capability-id>", bindResources?: { "<slot>": "<resource-id>" } }]',
+      );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      input as Record<string, unknown>,
+      "skills",
+    )
+  ) {
+      throw new Error(
+      'agent.skills has been replaced by useCapabilities: [{ capability: "<capability-id>", bindResources?: { "<slot>": "<resource-id>" } }]',
+      );
   }
 
   const id = normalizeRequiredString(input.id, "agent.id");
@@ -540,14 +817,12 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
   const quietHours = input.quietHours
     ? normalizeQuietHours(input.quietHours, `agent(${id}).quietHours`)
     : undefined;
-  const connectors = normalizeConnectors(input.connectors, `agent(${id}).connectors`);
-
-  const tools = Array.from(
-    new Set(input.tools.map((tool) => normalizeRequiredString(tool, `agent(${id}).tools`))),
+  const resources = normalizeResources(input.resources, `agent(${id}).resources`);
+  const useCapabilities = normalizeCapabilities(
+    input.useCapabilities,
+    `agent(${id}).useCapabilities`,
+    resources,
   );
-  if (tools.length === 0) {
-    throw new Error(`agent(${id}) must declare at least one tool`);
-  }
 
   const listeners = input.listen.map((listener, index) => {
     const listenerLabel = `agent(${id}).listen[${index}]`;
@@ -595,11 +870,11 @@ export function defineAgent(input: AgentDefinitionInput): AgentDefinition {
     id,
     name,
     listen: listeners,
-    tools,
+    useCapabilities,
     ...(description ? { description } : {}),
     ...(model ? { model } : {}),
     ...(proactive ? { proactive } : {}),
-    ...(connectors ? { connectors } : {}),
+    ...(resources ? { resources } : {}),
     ...(runtime ? { runtime } : {}),
     ...(quietHours ? { quietHours } : {}),
     ...(input.session

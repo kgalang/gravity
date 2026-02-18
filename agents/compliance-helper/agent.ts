@@ -6,9 +6,10 @@ export const complianceHelperAgent = defineAgent({
   description: "Compliance review proof-of-concept agent.",
   model: "claude-sonnet-4-5-20250929",
   runtime: "host",
-  connectors: [
+  resources: [
     {
-      type: "knowledge-docs",
+      id: "policy-docs",
+      kind: "knowledge-docs",
     },
   ],
   session: {
@@ -62,5 +63,18 @@ export const complianceHelperAgent = defineAgent({
     },
     triggers: [],
   },
-  tools: ["query-gravity", "rollback"],
+  useCapabilities: [
+    {
+      capability: "query-gravity-v1",
+    },
+    {
+      capability: "rollback-v1",
+    },
+    {
+      capability: "knowledge-docs-review-v1",
+      bindResources: {
+        docs: "policy-docs",
+      },
+    },
+  ],
 });
