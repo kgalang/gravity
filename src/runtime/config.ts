@@ -4,6 +4,7 @@ export type AppConfig = {
   livenessIntervalSeconds: number;
   slackAppToken: string | null;
   slackBotToken: string | null;
+  anthropicApiKey: string | null;
 };
 
 function normalizeOptionalEnv(value: string | undefined): string | null {
@@ -36,5 +37,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     livenessIntervalSeconds,
     slackAppToken: normalizeOptionalEnv(env.SLACK_APP_TOKEN),
     slackBotToken: normalizeOptionalEnv(env.SLACK_BOT_TOKEN),
+    anthropicApiKey: normalizeOptionalEnv(env.ANTHROPIC_API_KEY),
   };
 }
