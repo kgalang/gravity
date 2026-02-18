@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import type { AgentConnector } from "../../agents/contracts.js";
 import { agentRegistry } from "../../agents/index.js";
 import { type Api, getModels, type Model } from "@mariozechner/pi-ai";
 import {
@@ -21,7 +22,7 @@ import type {
   ExecutorRuntime,
 } from "./executor-manager.js";
 
-const DEFAULT_ANTHROPIC_MODEL_ID = "claude-opus-4-6";
+const DEFAULT_ANTHROPIC_MODEL_ID = "claude-sonnet-4-5";
 const MAX_DBT_CONTEXT_FILES = 10;
 const MAX_DBT_FILE_CHARS = 6000;
 
@@ -32,8 +33,7 @@ type AgentRuntimeRecord = {
   model: string;
   skills_path: string | null;
   memory_path: string | null;
-  connector: string | null;
-  duckdbPath: string | null;
+  connectors: readonly AgentConnector[];
 };
 
 type LoadedDocument = {
@@ -232,14 +232,14 @@ async function walkDbtMetadataFiles(modelsDir: string): Promise<string[]> {
   return discoveredFiles.slice(0, MAX_DBT_CONTEXT_FILES);
 }
 
-async function loadDbtContextFromDuckdbPath(
-  duckdbPath: string | null,
+async function loadDbtContextFromDuckdbConnectorPath(
+  duckdbConnectorPath: string | null,
 ): Promise<LoadedDocument[]> {
-  if (!duckdbPath) {
+  if (!duckdbConnectorPath) {
     return [];
   }
 
-  const projectRoot = path.dirname(duckdbPath);
+  const projectRoot = path.dirname(duckdbConnectorPath);
   const modelsDir = path.join(projectRoot, "models");
 
   try {
@@ -296,15 +296,15 @@ function buildSystemPrompt(input: {
   agentSkills: LoadedDocument[];
   memoryContent: string | null;
   dbtContextDocs: LoadedDocument[];
-  duckdbPath: string | null;
+  duckdbConnectorPath: string | null;
 }): string {
   const description = input.agent.description ?? "No description provided.";
   const memoryBlock =
     input.memoryContent ??
     "No prior memory is recorded yet for this agent.";
-  const duckdbPathLine =
-    input.duckdbPath ??
-    "DuckDB path not configured in agent config. Ask for configuration before running queries.";
+  const duckdbConnectorPathLine =
+    input.duckdbConnectorPath ??
+    "DuckDB path not configured in duckdb connector. Ask for configuration before running queries.";
 
   return [
     `You are ${input.agent.name} (${input.agent.id}).`,
@@ -318,7 +318,7 @@ function buildSystemPrompt(input: {
     "- Do not invent table or column names; inspect schema/docs when unsure.",
     "",
     "DuckDB execution contract:",
-    `- Preferred command pattern: duckdb ${duckdbPathLine} -cmd \"<SQL>\"`,
+    `- Preferred command pattern: duckdb ${duckdbConnectorPathLine} -cmd \"<SQL>\"`,
     "- Use `bash` for SQL execution and `read` for inspecting files/docs.",
     "- If output is truncated, follow the truncation hint or rerun a narrower query.",
     "",
@@ -373,8 +373,7 @@ function loadCodeDefinedAgentDetails(agentId: string): {
   name: string;
   description: string | null;
   model: string;
-  connector: string | null;
-  duckdbPath: string | null;
+  connectors: readonly AgentConnector[];
 } {
   const registered = agentRegistry.agentsById.get(agentId);
   if (!registered) {
@@ -385,9 +384,24 @@ function loadCodeDefinedAgentDetails(agentId: string): {
     name: registered.declaration.name,
     description: registered.declaration.description ?? null,
     model: registered.model,
-    connector: registered.declaration.connectors?.[0] ?? null,
-    duckdbPath: registered.declaration.duckdbPath ?? null,
+    connectors: registered.declaration.connectors ?? [],
   };
+}
+
+function connectorTypeNames(connectors: readonly AgentConnector[]): readonly string[] {
+  return connectors.map((connector) => connector.type);
+}
+
+function resolveDuckdbConnectorPath(
+  connectors: readonly AgentConnector[],
+): string | null {
+  for (const connector of connectors) {
+    if (connector.type === "duckdb") {
+      return connector.path;
+    }
+  }
+
+  return null;
 }
 
 async function loadAgentRuntimeRecord(
@@ -418,8 +432,7 @@ async function loadAgentRuntimeRecord(
     model: declaration.model,
     skills_path: row.skills_path,
     memory_path: row.memory_path,
-    connector: declaration.connector,
-    duckdbPath: declaration.duckdbPath,
+    connectors: declaration.connectors,
   };
 }
 
@@ -454,8 +467,8 @@ export async function runPiAgentTurn(
   const normalizedPrompt = normalizeUserPrompt(input.prompt);
   const skillPath = asStringOrNull(agent.skills_path);
   const memoryPath = asStringOrNull(agent.memory_path);
-  const connectorName = asStringOrNull(agent.connector);
-  const duckdbPath = asStringOrNull(agent.duckdbPath);
+  const connectorNames = connectorTypeNames(agent.connectors);
+  const duckdbConnectorPath = resolveDuckdbConnectorPath(agent.connectors);
 
   const sharedSkillsDir = resolvePathFromRepoRoot("store/shared/skills");
   const sharedConnectorsDir = resolvePathFromRepoRoot("store/shared/connectors");
@@ -467,13 +480,15 @@ export async function runPiAgentTurn(
   const [sharedSkills, agentSkills, dbtContextDocs] = await Promise.all([
     readMarkdownFiles(sharedSkillsDir),
     agentSkillsDir ? readMarkdownFiles(agentSkillsDir) : Promise.resolve([]),
-    loadDbtContextFromDuckdbPath(duckdbPath),
+    loadDbtContextFromDuckdbConnectorPath(duckdbConnectorPath),
   ]);
 
-  const connectorDocs = connectorName
+  const connectorDocs = connectorNames.length > 0
     ? await readMarkdownFiles(sharedConnectorsDir).then((documents) =>
         documents.filter((document) =>
-          path.basename(document.filePath).startsWith(connectorName),
+          connectorNames.some((connectorName) =>
+            path.basename(document.filePath).startsWith(connectorName),
+          ),
         ),
       )
     : [];
@@ -489,7 +504,7 @@ export async function runPiAgentTurn(
     agentSkills,
     memoryContent,
     dbtContextDocs,
-    duckdbPath,
+    duckdbConnectorPath,
   });
 
   const resourceLoader = createStaticResourceLoader(systemPrompt);
