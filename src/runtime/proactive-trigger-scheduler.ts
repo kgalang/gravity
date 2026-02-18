@@ -189,8 +189,8 @@ export function isWithinQuietHours(
   return zoned.hour >= quietHours.startHour || zoned.hour < quietHours.endHour;
 }
 
-function computeHeartbeatReplayTimes(input: {
-  trigger: Extract<ResolvedProactiveTrigger, { kind: "heartbeat" }>;
+export function computeHeartbeatReplayTimes(input: {
+  intervalSeconds: number;
   lastFiredAt: Date | null;
   now: Date;
   lookbackStart: Date;
@@ -201,12 +201,16 @@ function computeHeartbeatReplayTimes(input: {
   }
 
   const replayTimes: Date[] = [];
-  const baseTime = Math.max(
-    input.lastFiredAt.getTime(),
-    input.lookbackStart.getTime(),
-  );
-  const intervalMs = input.trigger.intervalSeconds * 1000;
-  let nextRunAt = baseTime + intervalMs;
+  const intervalMs = input.intervalSeconds * 1000;
+  if (intervalMs <= 0) {
+    return replayTimes;
+  }
+  let nextRunAt = input.lastFiredAt.getTime() + intervalMs;
+  const lookbackStartMs = input.lookbackStart.getTime();
+  if (nextRunAt < lookbackStartMs) {
+    const intervalsToAdvance = Math.ceil((lookbackStartMs - nextRunAt) / intervalMs);
+    nextRunAt += intervalsToAdvance * intervalMs;
+  }
   const nowMs = input.now.getTime();
 
   while (nextRunAt <= nowMs && replayTimes.length < input.maxRuns) {
@@ -217,24 +221,25 @@ function computeHeartbeatReplayTimes(input: {
   return replayTimes;
 }
 
-function computeCronReplayTimes(input: {
-  trigger: Extract<ResolvedProactiveTrigger, { kind: "cron" }>;
+export function computeCronReplayTimes(input: {
+  schedule: string;
   lastFiredAt: Date | null;
   now: Date;
   lookbackStart: Date;
   maxRuns: number;
+  onInvalidSchedule?: (errorMessage: string) => void;
 }): Date[] {
   if (!input.lastFiredAt) {
     return [];
   }
 
   const replayTimes: Date[] = [];
-  const cron = new Cron(input.trigger.schedule, {
-    paused: true,
-    catch: false,
-  });
-
+  let cron: Cron | null = null;
   try {
+    cron = new Cron(input.schedule, {
+      paused: true,
+      catch: false,
+    });
     const cursor =
       input.lastFiredAt.getTime() < input.lookbackStart.getTime()
         ? input.lookbackStart
@@ -250,8 +255,11 @@ function computeCronReplayTimes(input: {
       replayTimes.push(nextRunAt);
       nextRunAt = cron.nextRun(nextRunAt);
     }
+  } catch (error) {
+    input.onInvalidSchedule?.(normalizeErrorMessage(error));
+    return [];
   } finally {
-    cron.stop();
+    cron?.stop();
   }
 
   return replayTimes;
@@ -263,10 +271,11 @@ function computeReplayTimes(input: {
   now: Date;
   lookbackStart: Date;
   maxRuns: number;
+  onInvalidCronSchedule?: (errorMessage: string) => void;
 }): Date[] {
   if (input.trigger.kind === "heartbeat") {
     return computeHeartbeatReplayTimes({
-      trigger: input.trigger,
+      intervalSeconds: input.trigger.intervalSeconds,
       lastFiredAt: input.lastFiredAt,
       now: input.now,
       lookbackStart: input.lookbackStart,
@@ -275,11 +284,12 @@ function computeReplayTimes(input: {
   }
 
   return computeCronReplayTimes({
-    trigger: input.trigger,
+    schedule: input.trigger.schedule,
     lastFiredAt: input.lastFiredAt,
     now: input.now,
     lookbackStart: input.lookbackStart,
     maxRuns: input.maxRuns,
+    onInvalidSchedule: input.onInvalidCronSchedule,
   });
 }
 
@@ -474,6 +484,11 @@ export function createProactiveTriggerScheduler(
         now: nowAt,
         lookbackStart,
         maxRuns: maxReplayRunsPerTrigger,
+        onInvalidCronSchedule: (errorMessage) => {
+          log(
+            `[gravity] proactive replay skipped (invalid cron agentId=${trigger.agentId} triggerId=${trigger.triggerId}): ${errorMessage}`,
+          );
+        },
       });
 
       for (const replayAt of replayTimes) {
