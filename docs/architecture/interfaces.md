@@ -5,6 +5,8 @@ Keep moving parts explicit and replaceable.
 ## Runtime Interfaces (current)
 - `DbClient` (`src/runtime/db.ts`): owns typed Postgres connectivity via Kysely and provides the `gravity` schema handle.
 - `SlackTransport` (`src/runtime/slack-transport.ts`): owns Slack Socket Mode connection, inbound event normalization, and channel-scoped message queueing.
+- `defineConfig` / `defineAgent` contracts (`agents/contracts.ts`): canonical code-defined configuration and agent declaration authoring model.
+- `AgentRegistry` (`agents/index.ts`): typed registry assembly with duplicate `agentId` and slash-command collision guards.
 - `CompiledAgentDeclarations` (CP5.1 target): code-defined runtime declarations compiled from `defineConfig` + `defineAgent` contracts and used as routing/scheduling source of truth.
 - `SlashCommandRouter` (`src/runtime/slash-command-router.ts`): legacy slash resolver seam targeted for removal in CP5.1.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
@@ -40,6 +42,10 @@ Keep moving parts explicit and replaceable.
 - `DbClient` rollback path: swap `src/runtime/db.ts` back to direct `pg` access while preserving SQL contracts and migration files.
 - `SlackTransport` owner: platform runtime layer.
 - `SlackTransport` rollback path: disable live Slack connection in `src/index.ts` and fall back to no-op inbound logging while preserving normalized inbound event contracts.
+- `defineConfig` / `defineAgent` contracts owner: platform runtime layer.
+- `defineConfig` / `defineAgent` rollback path: revert `agents/contracts.ts` to previous declaration shape while preserving required IDs (`agentId`, `sessionKey`, `runId`) in downstream runtime contracts.
+- `AgentRegistry` owner: platform runtime layer.
+- `AgentRegistry` rollback path: pin `agents/index.ts` to previous known-good declarations and keep DB projection unchanged.
 - `TriggerNormalizer` owner: platform runtime layer.
 - `TriggerNormalizer` rollback path: temporarily route Slack ingress directly to runtime handlers while preserving run lifecycle and stable IDs.
 - `EventIdempotencyGuard` owner: platform runtime layer.
