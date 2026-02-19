@@ -42,6 +42,15 @@ SELECT id, name, status, channel_id FROM gravity.agents;
 4. Inspect CP10 matrix and evidence in `docs/checkpoints/cp10-verification.md`
 5. Manual wake during live runtime: use mapped slash command text `!wake` or `!wake <trigger-id>`
 
+## CP8 Verification Commands
+1. Ensure Postgres is running and schema is current: `npm run db:up && npm run db:apply`
+2. Run CP8 verification harness: `npm run verify:cp8`
+3. Run full repository gates: `npm run check`
+4. Inspect CP8 matrix and evidence in `docs/checkpoints/cp8-verification.md`
+5. Optional runtime knobs:
+   - `GRAVITY_SELF_AUTHORING_ENABLED=true|false`
+   - `GRAVITY_SELF_AUTHORING_QUEUE_MAX_DEPTH=<int>=8 default`
+
 ## Notes
 - `db/migrations/` is the source of truth for schema changes; `schema.sql` is a bootstrap snapshot.
 - `seed.sql` contains workspace-specific Slack `channel_id` values. Update them before applying in a different workspace.

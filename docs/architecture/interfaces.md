@@ -37,6 +37,15 @@ Keep moving parts explicit and replaceable.
 - `ToolDispatcher`: single dispatch seam for all tool execution (implemented through `ExecutorManager` in current runtime).
 - `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
 
+## CP8 Self-Authoring Interfaces (current)
+- `SelfAuthoringIntentDetector` (`src/runtime/self-authoring-intent.ts`): detects teach/update intent and generates the single-turn structured mutation payload used by CP8 mutation transactions.
+- `SelfAuthoringTypes` (`src/runtime/self-authoring-types.ts`): shared CP8 transaction types for mutation payloads and stable-ID request context across coordinator, queue, policy, and applier seams.
+- `SelfAuthoringMutationCoordinator` (`src/runtime/self-authoring-mutation-coordinator.ts`): orchestrates one self-authoring mutation transaction (`request -> authoring turn -> lock -> apply -> audit`) for a target agent/session context.
+- `SelfAuthoringMutationQueue` (`src/runtime/self-authoring-mutation-queue.ts`): enforces per-agent conflict serialization with FIFO queueing for concurrent self-author requests plus trigger-key dedupe.
+- `SelfAuthoringMutationPolicy` (`src/runtime/self-authoring-mutation-policy.ts`): validates proposed mutation targets against CP8 allowlist policy (skills + agent memory only) and rejects all non-allowlisted paths fail-closed.
+- `SelfAuthoringMutationApplier` (`src/runtime/self-authoring-mutation-applier.ts`): applies approved self-authored skill/memory deltas to durable stores (`store/shared/skills`, `store/agents/{agentId}/memory/MEMORY.md`) with explicit write boundaries.
+- `SkillVersionAuditStore` (`src/runtime/skill-version-audit-store.ts`): records self-authored skill evolution metadata in `gravity.skill_versions` with stable-ID linkage to request/run context.
+
 ## Removed Legacy Seams (CP5.1 Step 6)
 - `src/runtime/agent-config.ts`
 - `src/runtime/ingress-binding-resolver.ts`
@@ -95,6 +104,16 @@ Keep moving parts explicit and replaceable.
 - `ExecutorManager` rollback path: revert `pi-agent-runner` tool wiring to direct host tool construction while keeping runtime policy fields backward-compatible.
 - `ProactiveTriggerScheduler` owner: platform runtime layer.
 - `ProactiveTriggerScheduler` rollback path: disable scheduler startup and replay/wake control surfaces while preserving `proactiveTriggers` config contracts.
+- `SelfAuthoringMutationCoordinator` owner: platform runtime layer.
+- `SelfAuthoringMutationCoordinator` rollback path: disable autonomous mutation orchestration and require explicit operator/manual mutation flow while preserving `gravity.runs` logging contracts.
+- `SelfAuthoringMutationQueue` owner: platform runtime layer.
+- `SelfAuthoringMutationQueue` rollback path: disable queueing and execute only when mutation lock is immediately available, with explicit busy-reject responses for conflicts.
+- `SelfAuthoringMutationPolicy` owner: platform runtime layer.
+- `SelfAuthoringMutationPolicy` rollback path: disable autonomous mutation policy checks and force manual operator approval for all mutation writes until allowlist enforcement is restored.
+- `SelfAuthoringMutationApplier` owner: platform runtime layer.
+- `SelfAuthoringMutationApplier` rollback path: disable autonomous skill/memory writes and require manual operator-authored file updates while preserving request/run lifecycle logging.
+- `SkillVersionAuditStore` owner: platform runtime layer.
+- `SkillVersionAuditStore` rollback path: disable `gravity.skill_versions` writes and rely on file history-only audit until DB audit path is restored.
 - `PiAgentRunner` owner: platform runtime layer.
 - `PiAgentRunner` rollback path: revert inbound execution paths to deterministic echo-only behavior while preserving `RunLifecycleLogger` + `RunLogStore` contracts.
 

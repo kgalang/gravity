@@ -8,6 +8,7 @@
 - CP5 verification harness (`npm run verify:cp5`) validates persisted run lifecycle fields across slash/non-slash/proactive paths and failure handling.
 - CP6 session scaffolding (`npm run verify:cp6`) validates dual-history file contracts, pre-run sync seams, memory reload-next-turn behavior, and overflow compaction recovery.
 - CP7 session-end memory hook harness (`npm run verify:cp7`) validates silent hook execution, skip guards, replay exclusion (`skipContextReplay`), close-flow fallback behavior, and stale idle-close guard behavior.
+- CP8 self-authoring mutation harness (`npm run verify:cp8`) validates teach/apply mutation correctness, allowlist guardrails, per-agent FIFO queueing, queue-overflow rejection, duplicate-trigger dedupe, rollback snapshot output, and stable-ID audit linkage in `gravity.skill_versions`.
 - CP10 proactive scheduler replay/backfill (`npm run verify:cp10`) rehydrates missed `cron`/`heartbeat` runs from persisted run history.
 
 ## Planned Reliability Contracts

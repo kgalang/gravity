@@ -9,6 +9,7 @@ This repository follows a harness-oriented workflow: docs first, clear interface
 - Checkpoint board: [docs/checkpoints/mvp-status.md](docs/checkpoints/mvp-status.md)
 - CP6 verification matrix: [docs/checkpoints/cp6-verification.md](docs/checkpoints/cp6-verification.md)
 - CP7 verification matrix: [docs/checkpoints/cp7-verification.md](docs/checkpoints/cp7-verification.md)
+- CP8 verification matrix: [docs/checkpoints/cp8-verification.md](docs/checkpoints/cp8-verification.md)
 - CP10 verification matrix: [docs/checkpoints/cp10-verification.md](docs/checkpoints/cp10-verification.md)
 - System map: [docs/architecture/system-map.md](docs/architecture/system-map.md)
 - Interface boundaries: [docs/architecture/interfaces.md](docs/architecture/interfaces.md)

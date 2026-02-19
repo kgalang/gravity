@@ -38,6 +38,7 @@ CP5.1 migration note:
 - Proactive scheduler reconciles missed runs from persisted run history on startup/reload windows and supports manual wake controls for heartbeat triggers.
 - Quiet-hours policy can suppress proactive replay/scheduled runs while allowing explicit manual bypass.
 - Source-event idempotency is enforced before run execution (in-flight guard + `gravity.runs.source_event_id` check).
+- CP8 self-authoring mutation flow supports teach/update intent detection, allowlist-only writes (`store/shared/skills/*.md`, `store/agents/{agentId}/memory/MEMORY.md`), per-agent FIFO mutation queueing, and `gravity.skill_versions` audit logging.
 - Claude API loop with compaction and tool-result truncation from `mvp_requirements.md`.
 - CP6 fail-closed runtime config: invalid session/compaction/retry/hook settings disable feature activation and emit runtime warnings.
 - DuckDB resource at `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb` for Wiggs.
