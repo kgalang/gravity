@@ -70,7 +70,7 @@ SessionIdleEvictionCoordinator (timer + event)
 ### Out of scope for CP7
 - Pre-compaction memory flush.
 - Autonomy/self-author loops (CP8).
-- Multi-agent orchestration behavior (CP9).
+- Compliance bot policy/review rollout behavior (CP9).
 
 ## Hardening Follow-up Applied (2026-02-19)
 

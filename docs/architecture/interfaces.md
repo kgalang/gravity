@@ -46,6 +46,10 @@ Keep moving parts explicit and replaceable.
 - `SelfAuthoringMutationApplier` (`src/runtime/self-authoring-mutation-applier.ts`): applies approved self-authored skill/memory deltas to durable stores (`store/shared/skills`, `store/agents/{agentId}/memory/MEMORY.md`) with explicit write boundaries.
 - `SkillVersionAuditStore` (`src/runtime/skill-version-audit-store.ts`): records self-authored skill evolution metadata in `gravity.skill_versions` with stable-ID linkage to request/run context.
 
+## CP9 Pearlboy Interfaces (current)
+- `PiAgentRunner` (`src/runtime/pi-agent-runner.ts`): executes Pearlboy turns using the same conversational runtime path as other agents.
+- `Compliance Guidance Skills` (`store/shared/skills/compliance-helper-review-rules.md`, `store/shared/skills/compliance-helper-flag-patterns.md`): shared policy guidance surfaced in prompt context for conversational review and follow-up Q&A.
+
 ## Removed Legacy Seams (CP5.1 Step 6)
 - `src/runtime/agent-config.ts`
 - `src/runtime/ingress-binding-resolver.ts`

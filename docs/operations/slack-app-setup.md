@@ -6,7 +6,7 @@ This doc is the source of truth for configuring the Gravity Slack app.
 
 Enable all current Gravity trigger and delivery paths:
 
-- Slash commands: `/wiggs`, `/compliance`
+- Slash commands: `/wiggs`, `/compliance`, `/pearlboy`
 - Non-slash message triggers: `app_mention`, thread replies, DM messages
 - Proactive delivery targets: channel thread and DM user
 
@@ -78,6 +78,7 @@ Under `Features -> Slash Commands`, add:
 
 - `/wiggs`
 - `/compliance`
+- `/pearlboy`
 
 Slack requires a Request URL value in the form even when Socket Mode is enabled.
 Use a valid HTTPS placeholder (for example `https://example.com/slack/commands`) if you do not use HTTP ingress.
@@ -112,10 +113,20 @@ Expected log when connected:
 ## 9. Verification Checklist
 
 1. Slash command: `/wiggs top customers`
-2. App mention: `@Gravity test`
-3. Thread reply under bot thread
-4. DM message to app
-5. (Optional) proactive trigger delivery to channel thread and DM
+2. Slash command: `/compliance <draft copy>` (Pearlboy compliance review)
+3. Slash command: `/pearlboy <draft copy>` (Pearlboy alias)
+4. App mention: `@Gravity test`
+5. Thread reply under bot thread
+6. DM message to app
+7. (Optional) proactive trigger delivery to channel thread and DM
+
+Expected `/compliance` review contract:
+
+- `Verdict: pass | needs_revision | block | needs_human_review`
+- `Flags` section with matched phrase + rule id
+- `Required Disclosures` section when applicable
+- `Suggested Revision` section
+- `Escalation` section for human-review routing
 
 ## 10. Troubleshooting
 
@@ -124,6 +135,6 @@ Expected log when connected:
 - Symptom: no inbound events
   - Fix: verify Socket Mode is enabled, required bot events are subscribed, app reinstalled.
 - Symptom: slash command not routed
-  - Fix: confirm `/wiggs` and `/compliance` exist in Slack and match router mapping.
+  - Fix: confirm `/wiggs`, `/compliance`, and `/pearlboy` exist in Slack and match router mapping.
 - Symptom: proactive DM delivery fails
   - Fix: add `im:write`, reinstall app, verify `SLACK_BOT_TOKEN` is current.

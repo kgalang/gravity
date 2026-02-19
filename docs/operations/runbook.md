@@ -51,6 +51,15 @@ SELECT id, name, status, channel_id FROM gravity.agents;
    - `GRAVITY_SELF_AUTHORING_ENABLED=true|false`
    - `GRAVITY_SELF_AUTHORING_QUEUE_MAX_DEPTH=<int>=8 default`
 
+## CP9 Verification Commands
+1. Run full repository gates: `npm run check`
+2. Confirm Pearlboy ingress is mapped in Slack (`/compliance`, `/pearlboy`) and replies in-thread.
+3. Validate conversational follow-up behavior in-thread (ask clarifying questions after initial verdict).
+4. Review/update shared compliance guidance:
+   - `store/shared/skills/compliance-helper-review-rules.md`
+   - `store/shared/skills/compliance-helper-flag-patterns.md`
+5. Inspect CP9 matrix context in `docs/checkpoints/cp9-verification.md` when needed for historical rollout evidence.
+
 ## Notes
 - `db/migrations/` is the source of truth for schema changes; `schema.sql` is a bootstrap snapshot.
 - `seed.sql` contains workspace-specific Slack `channel_id` values. Update them before applying in a different workspace.

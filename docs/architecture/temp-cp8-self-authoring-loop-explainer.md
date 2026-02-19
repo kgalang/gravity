@@ -45,8 +45,8 @@ flowchart TD
 | Bad update introduced | Hard to trace what changed | `gravity.skill_versions` gives explicit audit trail |
 
 ## What we implemented in docs now
-- CP8 active plan is now centered on mutation transactions and auditability:
-  - `docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md`
+- CP8 completed plan is centered on mutation transactions and auditability:
+  - `docs/plans/completed/2026-02-19-cp8-self-authoring-runtime-loop.md`
 - CP8 interfaces are now mutation-oriented:
   - `SelfAuthoringMutationCoordinator`
   - `SelfAuthoringMutationQueue`

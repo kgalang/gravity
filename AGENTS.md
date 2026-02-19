@@ -5,11 +5,12 @@ This repository follows a harness-oriented workflow: docs first, clear interface
 ## Fast Map
 - Canonical docs index: [docs/README.md](docs/README.md)
 - Canonical rearchitecture decision: [docs/architecture/rearchitecture-decision.md](docs/architecture/rearchitecture-decision.md)
-- Current execution plan: [docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md](docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md)
+- Current execution plan: [docs/plans/active/2026-02-19-cp11-demo-polish-rehearsal.md](docs/plans/active/2026-02-19-cp11-demo-polish-rehearsal.md)
 - Checkpoint board: [docs/checkpoints/mvp-status.md](docs/checkpoints/mvp-status.md)
 - CP6 verification matrix: [docs/checkpoints/cp6-verification.md](docs/checkpoints/cp6-verification.md)
 - CP7 verification matrix: [docs/checkpoints/cp7-verification.md](docs/checkpoints/cp7-verification.md)
 - CP8 verification matrix: [docs/checkpoints/cp8-verification.md](docs/checkpoints/cp8-verification.md)
+- CP9 verification matrix: [docs/checkpoints/cp9-verification.md](docs/checkpoints/cp9-verification.md)
 - CP10 verification matrix: [docs/checkpoints/cp10-verification.md](docs/checkpoints/cp10-verification.md)
 - System map: [docs/architecture/system-map.md](docs/architecture/system-map.md)
 - Interface boundaries: [docs/architecture/interfaces.md](docs/architecture/interfaces.md)
@@ -26,6 +27,7 @@ This repository follows a harness-oriented workflow: docs first, clear interface
 - Autonomy rollout ladder: [docs/policies/autonomy-ladder.md](docs/policies/autonomy-ladder.md)
 - Doc maintenance policy: [docs/policies/doc-gardening.md](docs/policies/doc-gardening.md)
 - Bootstrap runbook: [docs/operations/runbook.md](docs/operations/runbook.md)
+- Pearlboy policy intake: [docs/operations/pearlboy-policy-intake.md](docs/operations/pearlboy-policy-intake.md)
 
 ## Working Rules
 - Treat `docs/` as system-of-record. If code and docs diverge, update docs in the same change.
