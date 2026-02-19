@@ -1,23 +1,10 @@
 # Gravity
 
-Gravity is a framework for building agents that amplify expert operators.
+As engineering velocity multiplies with AI, the bottleneck shifts to every team that can't write code — compliance, marketing, operations, support. The expertise to unblock them already exists inside the organization. It's just locked in a few people's heads. Off-the-shelf tools can't help because the value isn't generic automation — it's company-specific judgment.
 
-Instead of shipping one-off bots, Gravity is designed to create compounding leverage:
+Gravity is a platform for encoding that expertise into agents and distributing it to everyone who needs it. Inspired by teams like OpenAI's Leverage Engineering, the approach is amplification, not automation: sit with the best operator in a function, learn how they think, and build an agent that makes their judgment available to the whole org.
 
-- each new agent is faster to launch,
-- and the marginal maintenance cost per deployed agent decreases as shared platform pieces improve.
-
-The project is inspired by OpenClaw-style gateway patterns and pi-style runtime loops, adapted into a docs-first platform for long-term multi-agent operation.
-
-## Why This Exists
-
-Many organizations have expert operators whose judgment becomes a bottleneck. Gravity exists to encode that judgment into reusable agents so expertise is distributed, not trapped in a few individuals.
-
-The objective is amplification, not replacement:
-
-- preserve expert quality,
-- increase expert reach,
-- and improve decision speed.
+The platform is designed so a small central team can service an entire organization. Every agent shares the same primitives, so each one ships faster than the last and the marginal cost of maintaining one more agent goes down, not up. Experts author and refine skills directly — no eng cycle required — and agents improve over time through usage and feedback.
 
 ## How To Think About An Agent
 
