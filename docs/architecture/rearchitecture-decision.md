@@ -3,7 +3,7 @@
 Status: accepted
 Date: 2026-02-18
 Owners: kevin + codex
-Scope: current migration baseline through CP11 demo readiness
+Scope: current migration baseline through CP10, with CP11 demo polish deferred
 
 ## Purpose
 This document is the source of truth for Gravity's architecture direction during the current rearchitecture.
@@ -291,7 +291,7 @@ Control: this doc stays authoritative, `docs/README.md` links to it, and rollbac
 ## Engineer Takeover Checklist
 1. Read this document first.
 2. Read `docs/architecture/system-map.md` and `docs/architecture/interfaces.md` for current runtime topology.
-3. Read `docs/plans/active/2026-02-19-cp11-demo-polish-rehearsal.md` for active execution details.
+3. Read `docs/plans/on-hold/2026-02-19-cp11-demo-polish-rehearsal.md` for deferred CP11 follow-up scope.
 4. Run `npm run check` and both verification harnesses (`npm run verify:cp5`, `npm run verify:cp10`).
 5. Confirm removed legacy modules do not exist/import anywhere in runtime paths.
 
