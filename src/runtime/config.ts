@@ -22,6 +22,11 @@ export type SessionRuntimeConfig = Readonly<{
   }>;
 }>;
 
+export type SelfAuthoringRuntimeConfig = Readonly<{
+  enabled: boolean;
+  queueMaxDepth: number;
+}>;
+
 export type AppConfig = {
   env: string;
   databaseUrl: string;
@@ -30,6 +35,7 @@ export type AppConfig = {
   slackBotToken: string | null;
   anthropicApiKey: string | null;
   session: SessionRuntimeConfig;
+  selfAuthoring: SelfAuthoringRuntimeConfig;
   runtimeWarnings: readonly string[];
 };
 
@@ -42,6 +48,7 @@ const DEFAULT_RETRY_MAX_RETRIES = 2;
 const DEFAULT_RETRY_BASE_DELAY_MS = 1000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 5000;
 const DEFAULT_IDLE_EVICTION_MINUTES = 30;
+const DEFAULT_SELF_AUTHORING_QUEUE_MAX_DEPTH = 8;
 
 function normalizeOptionalEnv(value: string | undefined): string | null {
   if (!value) {
@@ -266,6 +273,37 @@ function resolveSessionRuntimeConfig(
   };
 }
 
+function resolveSelfAuthoringRuntimeConfig(
+  env: NodeJS.ProcessEnv,
+  warnings: string[],
+): SelfAuthoringRuntimeConfig {
+  const enabled = parseFeatureBoolean({
+    env,
+    key: "GRAVITY_SELF_AUTHORING_ENABLED",
+    defaultValue: true,
+    warnings,
+  });
+
+  const queueMaxDepth = parseRequiredInteger({
+    env,
+    key: "GRAVITY_SELF_AUTHORING_QUEUE_MAX_DEPTH",
+    defaultValue: DEFAULT_SELF_AUTHORING_QUEUE_MAX_DEPTH,
+    min: 1,
+    warnings,
+  });
+
+  if (queueMaxDepth === null) {
+    warnings.push(
+      `Self-authoring queue depth is invalid; using safe default ${DEFAULT_SELF_AUTHORING_QUEUE_MAX_DEPTH}.`,
+    );
+  }
+
+  return {
+    enabled,
+    queueMaxDepth: queueMaxDepth ?? DEFAULT_SELF_AUTHORING_QUEUE_MAX_DEPTH,
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const databaseUrlEnvVar = runtimeConfig.infra.database.urlEnvVar;
   const slackAppTokenEnvVar = runtimeConfig.infra.slack.appTokenEnvVar;
@@ -293,6 +331,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     slackBotToken: normalizeOptionalEnv(env[slackBotTokenEnvVar]),
     anthropicApiKey: normalizeOptionalEnv(env[modelApiKeyEnvVar]),
     session: resolveSessionRuntimeConfig(env, runtimeWarnings),
+    selfAuthoring: resolveSelfAuthoringRuntimeConfig(env, runtimeWarnings),
     runtimeWarnings,
   };
 }

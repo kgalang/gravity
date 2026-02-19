@@ -44,6 +44,12 @@ import {
   type RunLogStore,
 } from "./runtime/run-log-store.js";
 import {
+  createSelfAuthoringMutationCoordinator,
+  formatSelfAuthoringOutcome,
+  type SelfAuthoringMutationCoordinator,
+  type SelfAuthoringMutationOutcome,
+} from "./runtime/self-authoring-mutation-coordinator.js";
+import {
   buildIsolatedSessionKey,
   buildMessageSessionKey,
   buildProactiveSessionKey,
@@ -75,6 +81,7 @@ import {
   createSessionStartupBackfill,
   type SessionStartupBackfill,
 } from "./runtime/session-startup-backfill.js";
+import { createKyselySkillVersionAuditStore } from "./runtime/skill-version-audit-store.js";
 import {
   type InboundSlackMessage,
   type InboundSlackSlashCommand,
@@ -119,6 +126,7 @@ let sessionStartupBackfill: SessionStartupBackfill | null = null;
 let sessionRuntimeConfig: SessionRuntimeConfig | null = null;
 let eventIdempotencyGuard: EventIdempotencyGuard | null = null;
 let proactiveTriggerScheduler: ProactiveTriggerScheduler | null = null;
+let selfAuthoringMutationCoordinator: SelfAuthoringMutationCoordinator | null = null;
 let anthropicApiKey: string | null = null;
 let isShuttingDown = false;
 
@@ -161,6 +169,7 @@ async function shutdown(signal: string): Promise<void> {
   sessionRuntimeConfig = null;
   eventIdempotencyGuard = null;
   anthropicApiKey = null;
+  selfAuthoringMutationCoordinator = null;
 
   console.log(`[gravity] received ${signal}; shutdown complete`);
   process.exit(0);
@@ -394,6 +403,182 @@ async function executeAgentRun(
       return runResult;
     },
   );
+}
+
+type ExecuteSelfAuthoringRunInput = {
+  runLogStore: RunLogStore;
+  sessionHistoryStore: SessionHistoryStore;
+  sessionLogRole: SessionLogRole;
+  coordinator: SelfAuthoringMutationCoordinator;
+  runId: string;
+  agentId: string;
+  sessionKey: string;
+  prompt: string;
+  trigger: NormalizedTrigger;
+  lifecycleMetadata: {
+    query: string;
+    sourceEventId?: string | null;
+    channelId?: string | null;
+    threadTs?: string | null;
+    messageTs?: string | null;
+    userId?: string | null;
+    policyDecisions?: Record<string, unknown>;
+  };
+  onResponse: (
+    responseText: string,
+    outcome: SelfAuthoringMutationOutcome,
+  ) =>
+    | Promise<{
+        messageTs?: string | null;
+      } | void>
+    | {
+        messageTs?: string | null;
+      }
+    | void;
+};
+
+function summarizeSelfAuthoringOutcome(outcome: SelfAuthoringMutationOutcome): string {
+  if (outcome.status === "completed") {
+    return `self-authoring completed (applied=${outcome.appliedCount} audits=${outcome.auditRecords.length})`;
+  }
+
+  if (outcome.status === "mutation_policy_denied") {
+    return `self-authoring denied (${outcome.deniedTargets.length} denied target(s))`;
+  }
+
+  if (outcome.status === "deduped_duplicate") {
+    return "self-authoring deduped duplicate trigger";
+  }
+
+  if (outcome.status === "queue_overflow") {
+    return `self-authoring queue overflow (maxDepth=${outcome.maxDepth})`;
+  }
+
+  return `self-authoring failed (${outcome.errorMessage})`;
+}
+
+type SelfAuthoringFailedOutcome = Extract<
+  SelfAuthoringMutationOutcome,
+  { status: "failed" }
+>;
+
+class SelfAuthoringRunFailedError extends Error {
+  readonly outcome: SelfAuthoringFailedOutcome;
+
+  constructor(outcome: SelfAuthoringFailedOutcome) {
+    super(`self-authoring failed (${outcome.errorMessage})`);
+    this.name = "SelfAuthoringRunFailedError";
+    this.outcome = outcome;
+  }
+}
+
+async function executeSelfAuthoringRun(
+  input: ExecuteSelfAuthoringRunInput,
+): Promise<SelfAuthoringMutationOutcome> {
+  let resultSummary: string | null = null;
+  const runContext = createRunContext({
+    runId: input.runId,
+    agentId: input.agentId,
+    sessionKey: input.sessionKey,
+    triggerKind: input.trigger.triggerKind,
+    surface: input.trigger.surface,
+    entrypoint: input.trigger.entrypoint,
+  });
+  const persistenceLogger = input.runLogStore.createLifecycleLogger({
+    query: input.lifecycleMetadata.query,
+    sourceEventId: input.lifecycleMetadata.sourceEventId,
+    channelId: input.lifecycleMetadata.channelId,
+    threadTs: input.lifecycleMetadata.threadTs,
+    userId: input.lifecycleMetadata.userId,
+    policyDecisions: input.lifecycleMetadata.policyDecisions,
+    getResultSummary: () => resultSummary,
+  });
+
+  await input.sessionHistoryStore.appendSessionLog({
+    agentId: input.agentId,
+    sessionKey: input.sessionKey,
+    role: input.sessionLogRole,
+    text: input.prompt,
+    sourceEventId: input.lifecycleMetadata.sourceEventId,
+    runId: input.runId,
+    channelId: input.lifecycleMetadata.channelId,
+    threadTs: input.lifecycleMetadata.threadTs,
+    messageTs: input.lifecycleMetadata.messageTs,
+    userId: input.lifecycleMetadata.userId,
+    metadata: {
+      triggerKind: input.trigger.triggerKind,
+      entrypoint: input.trigger.entrypoint,
+      surface: input.trigger.surface,
+      phase: "self_authoring_input",
+    },
+  });
+  sessionIdleEvictionCoordinator?.recordActivity({
+    agentId: input.agentId,
+    sessionKey: input.sessionKey,
+  });
+
+  try {
+    return await withRunLifecycle(
+      runContext,
+      composeRunLifecycleLoggers([lifecycleLogger, persistenceLogger]),
+      async () => {
+        const outcome = await input.coordinator.execute({
+          agentId: input.agentId,
+          sessionKey: input.sessionKey,
+          runId: input.runId,
+          sourceEventId: input.lifecycleMetadata.sourceEventId ?? null,
+          userId: input.lifecycleMetadata.userId ?? null,
+          prompt: input.prompt,
+          triggerKind: input.trigger.triggerKind,
+          surface: input.trigger.surface,
+          entrypoint: input.trigger.entrypoint,
+        });
+
+        const finalOutcome: SelfAuthoringMutationOutcome = outcome ?? {
+          status: "failed",
+          triggerKey: "none",
+          queueSeq: -1,
+          stageHistory: ["failed"],
+          errorMessage: "self-authoring intent was not detected",
+        };
+        const responseText = formatSelfAuthoringOutcome(finalOutcome);
+        resultSummary = summarizeSelfAuthoringOutcome(finalOutcome);
+        const responseMetadata = await input.onResponse(responseText, finalOutcome);
+        await input.sessionHistoryStore.appendSessionLog({
+          agentId: input.agentId,
+          sessionKey: input.sessionKey,
+          role: "assistant",
+          text: responseText,
+          sourceEventId: input.lifecycleMetadata.sourceEventId,
+          runId: input.runId,
+          channelId: input.lifecycleMetadata.channelId,
+          threadTs: input.lifecycleMetadata.threadTs,
+          messageTs: responseMetadata?.messageTs ?? null,
+          userId: null,
+          metadata: {
+            triggerKind: input.trigger.triggerKind,
+            entrypoint: input.trigger.entrypoint,
+            surface: input.trigger.surface,
+            phase: "self_authoring_output",
+            selfAuthoringStatus: finalOutcome.status,
+          },
+        });
+        sessionIdleEvictionCoordinator?.recordActivity({
+          agentId: input.agentId,
+          sessionKey: input.sessionKey,
+        });
+        if (finalOutcome.status === "failed") {
+          throw new SelfAuthoringRunFailedError(finalOutcome);
+        }
+        return finalOutcome;
+      },
+    );
+  } catch (error) {
+    if (error instanceof SelfAuthoringRunFailedError) {
+      return error.outcome;
+    }
+    throw error;
+  }
 }
 
 function buildSlashCommandQuery(command: InboundSlackSlashCommand): string {
@@ -1195,12 +1380,21 @@ async function handleInboundSlashCommand(
     }
 
     const runId = createSlashRunId(command.sourceEventId);
+    const activeSelfAuthoringCoordinator = selfAuthoringMutationCoordinator;
+    const isSelfAuthoringIntent =
+      activeSelfAuthoringCoordinator?.detectIntent(command.text) ?? false;
     const fullPrompt = command.text.trim();
-    const threadRootText = [
-      `Running ${command.command} for <@${command.userId}>. Replying in thread.`,
-      "Question:",
-      fullPrompt.length > 0 ? fullPrompt : "(no question provided)",
-    ].join("\n");
+    const threadRootText = isSelfAuthoringIntent
+      ? [
+          `Running self-authoring update for ${activeAgentId}. Replying in thread.`,
+          "Instruction:",
+          fullPrompt.length > 0 ? fullPrompt : "(no instruction provided)",
+        ].join("\n")
+      : [
+          `Running ${command.command} for <@${command.userId}>. Replying in thread.`,
+          "Question:",
+          fullPrompt.length > 0 ? fullPrompt : "(no question provided)",
+        ].join("\n");
     const threadTs = await activeSlackTransport.postChannelMessage(
       command.channelId,
       threadRootText,
@@ -1233,6 +1427,68 @@ async function handleInboundSlashCommand(
       ownerUserId: command.userId,
       openedByTrigger: normalizedTrigger.triggerKind,
     });
+
+    if (isSelfAuthoringIntent) {
+      if (!activeSelfAuthoringCoordinator) {
+        throw new Error("Self-authoring mutation coordinator is not initialized");
+      }
+
+      const outcome = await executeSelfAuthoringRun({
+        runLogStore: activeRunLogStore,
+        sessionHistoryStore: activeSessionHistoryStore,
+        sessionLogRole: sessionLogRoleForTrigger(normalizedTrigger.triggerKind),
+        coordinator: activeSelfAuthoringCoordinator,
+        runId,
+        agentId: activeAgentId,
+        sessionKey,
+        prompt: command.text,
+        trigger: normalizedTrigger,
+        lifecycleMetadata: {
+          query: decision.query,
+          sourceEventId: command.sourceEventId,
+          channelId: command.channelId,
+          threadTs,
+          messageTs: null,
+          userId: command.userId,
+          policyDecisions: {
+            trigger: "slash_command",
+            response_type: decision.ackResponse.response_type,
+            session_mode: resolvedSessionMode,
+            self_authoring: true,
+          },
+        },
+        onResponse: async (responseText) => {
+          const responseMessageTs = await activeSlackTransport.postThreadReply(
+            command.channelId,
+            threadTs,
+            responseText,
+          );
+          await ensureActiveSlackSession({
+            catalog: activeSessionCatalog,
+            sessionKey,
+            agentId: activeAgentId,
+            mode: resolvedSessionMode,
+            channelId: command.channelId,
+            threadTs,
+            ownerUserId: command.userId,
+            openedByTrigger: normalizedTrigger.triggerKind,
+          });
+          return { messageTs: responseMessageTs };
+        },
+      });
+
+      console.log(
+        `[gravity] slash self-authoring handled ${JSON.stringify({
+          sourceEventId: command.sourceEventId,
+          agentId: activeAgentId,
+          runId,
+          sessionKey,
+          threadTs,
+          status: outcome.status,
+        })}`,
+      );
+      return;
+    }
 
     const runResult = await executeAgentRun({
       db: activeDbClient,
@@ -1385,6 +1641,9 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
   const resolvedEntrypoint = decision.entrypoint;
   const resolvedSessionMode = decision.sessionMode;
   const normalizedTrigger = decision.trigger;
+  const activeSelfAuthoringCoordinator = selfAuthoringMutationCoordinator;
+  const isSelfAuthoringIntent =
+    activeSelfAuthoringCoordinator?.detectIntent(message.text) ?? false;
 
   try {
     const runId = createMessageRunId(message.sourceEventId);
@@ -1419,6 +1678,70 @@ async function handleInboundMessage(message: InboundSlackMessage): Promise<void>
       ownerUserId: message.userId,
       openedByTrigger: normalizedTrigger.triggerKind,
     });
+
+    if (isSelfAuthoringIntent) {
+      if (!activeSelfAuthoringCoordinator) {
+        throw new Error("Self-authoring mutation coordinator is not initialized");
+      }
+
+      const outcome = await executeSelfAuthoringRun({
+        runLogStore: activeRunLogStore,
+        sessionHistoryStore: activeSessionHistoryStore,
+        sessionLogRole: sessionLogRoleForTrigger(normalizedTrigger.triggerKind),
+        coordinator: activeSelfAuthoringCoordinator,
+        runId,
+        agentId: resolvedAgentId,
+        sessionKey,
+        prompt: message.text,
+        trigger: normalizedTrigger,
+        lifecycleMetadata: {
+          query: decision.query,
+          sourceEventId: message.sourceEventId,
+          channelId: message.channelId,
+          threadTs: message.threadTs,
+          messageTs: message.messageTs,
+          userId: message.userId,
+          policyDecisions: {
+            trigger: resolvedEntrypoint,
+            route: decision.route,
+            session_mode: resolvedSessionMode,
+            self_authoring: true,
+          },
+        },
+        onResponse: async (responseText) => {
+          const responseMessageTs = await deliverMessageResponse({
+            message,
+            entrypoint: resolvedEntrypoint,
+            responseText,
+          });
+          await ensureActiveSlackSession({
+            catalog: activeSessionCatalog,
+            sessionKey,
+            agentId: resolvedAgentId,
+            mode: resolvedSessionMode,
+            channelId: message.channelId,
+            threadTs: message.threadTs,
+            ownerUserId: message.userId,
+            openedByTrigger: normalizedTrigger.triggerKind,
+          });
+          return { messageTs: responseMessageTs };
+        },
+      });
+
+      console.log(
+        `[gravity] message self-authoring handled ${JSON.stringify({
+          sourceEventId: message.sourceEventId,
+          agentId: resolvedAgentId,
+          runId,
+          sessionKey,
+          entrypoint: resolvedEntrypoint,
+          route: decision.route,
+          sessionMode: resolvedSessionMode,
+          status: outcome.status,
+        })}`,
+      );
+      return;
+    }
 
     const runResult = await executeAgentRun({
       db: activeDbClient,
@@ -1557,10 +1880,24 @@ try {
     eventIdempotencyGuard = createEventIdempotencyGuard(
       createKyselyEventIdempotencyRepository(dbClient),
     );
+    selfAuthoringMutationCoordinator = config.selfAuthoring.enabled
+      ? createSelfAuthoringMutationCoordinator({
+          cwd: process.cwd(),
+          queueMaxDepth: config.selfAuthoring.queueMaxDepth,
+          auditStore: createKyselySkillVersionAuditStore(dbClient),
+        })
+      : null;
     console.log("[gravity] run log store active (gravity.runs)");
     console.log("[gravity] session catalog active (gravity.sessions)");
     console.log("[gravity] session history store active (workspace dual-history)");
     console.log("[gravity] event idempotency guard active (source_event_id)");
+    if (selfAuthoringMutationCoordinator) {
+      console.log(
+        `[gravity] self-authoring mutation coordinator active (queueMaxDepth=${config.selfAuthoring.queueMaxDepth})`,
+      );
+    } else {
+      console.log("[gravity] self-authoring mutation coordinator disabled");
+    }
 
     if (config.slackAppToken && config.slackBotToken) {
       console.log(

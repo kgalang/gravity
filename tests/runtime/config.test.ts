@@ -35,6 +35,10 @@ describe("loadConfig", () => {
           memoryHookEnabled: true,
         },
       },
+      selfAuthoring: {
+        enabled: true,
+        queueMaxDepth: 8,
+      },
       runtimeWarnings: [],
     });
   });
@@ -52,6 +56,10 @@ describe("loadConfig", () => {
     expect(config.databaseUrl).toBe("postgres://custom-url");
     expect(config.livenessIntervalSeconds).toBe(45);
     expect(config.session.idleEviction.timeoutMs).toBe(5 * 60 * 1000);
+    expect(config.selfAuthoring).toEqual({
+      enabled: true,
+      queueMaxDepth: 8,
+    });
     expect(config.runtimeWarnings).toEqual([]);
   });
 
@@ -91,6 +99,7 @@ describe("loadConfig", () => {
       GRAVITY_SESSION_RETRY_MAX_DELAY_MS: "50",
       GRAVITY_SESSION_IDLE_EVICTION_MINUTES: "0",
       GRAVITY_SESSION_MEMORY_HOOK_ENABLED: "true",
+      GRAVITY_SELF_AUTHORING_QUEUE_MAX_DEPTH: "zero",
     });
 
     expect(config.session.preRunSyncEnabled).toBe(false);
@@ -98,6 +107,7 @@ describe("loadConfig", () => {
     expect(config.session.retry.enabled).toBe(false);
     expect(config.session.idleEviction.enabled).toBe(false);
     expect(config.session.idleEviction.memoryHookEnabled).toBe(false);
+    expect(config.selfAuthoring.queueMaxDepth).toBe(8);
     expect(config.runtimeWarnings.length).toBeGreaterThan(0);
   });
 });
