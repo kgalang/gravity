@@ -165,6 +165,14 @@ function parseTimestampMs(timestamp: string): number {
   return parsed;
 }
 
+function shouldSkipContextReplay(record: StoredSessionLogRecord): boolean {
+  if (record.metadata.skipContextReplay === true) {
+    return true;
+  }
+  const phase = record.metadata.phase;
+  return phase === "memory_hook_input" || phase === "memory_hook_output";
+}
+
 function toContextMessageText(record: StoredSessionLogRecord): string {
   if (record.role === "system") {
     return `[system] ${record.text}`;
@@ -351,6 +359,7 @@ export function createSessionHistoryStore(input: {
     const syncedSourceEventIds = collectSyncedSourceEventIds(inputSync.sessionManager);
     const unsyncedForContext = logEntries
       .filter((record) => record.role === "user" || record.role === "system")
+      .filter((record) => !shouldSkipContextReplay(record))
       .filter(
         (
           record,

@@ -65,6 +65,12 @@ import {
   type SessionIdleEvictionCoordinator,
 } from "./runtime/session-idle-eviction.js";
 import {
+  createKyselyAgentMemoryPathLoader,
+  createSessionEndMemoryHook,
+  runSessionIdleCloseFlow,
+  type SessionEndMemoryHook,
+} from "./runtime/session-end-memory-hook.js";
+import {
   createKyselySlackThreadBackfillRepository,
   createSessionStartupBackfill,
   type SessionStartupBackfill,
@@ -108,6 +114,7 @@ let runLogStore: RunLogStore | null = null;
 let sessionCatalog: SessionCatalog | null = null;
 let sessionHistoryStore: SessionHistoryStore | null = null;
 let sessionIdleEvictionCoordinator: SessionIdleEvictionCoordinator | null = null;
+let sessionEndMemoryHook: SessionEndMemoryHook | null = null;
 let sessionStartupBackfill: SessionStartupBackfill | null = null;
 let sessionRuntimeConfig: SessionRuntimeConfig | null = null;
 let eventIdempotencyGuard: EventIdempotencyGuard | null = null;
@@ -149,6 +156,7 @@ async function shutdown(signal: string): Promise<void> {
   runLogStore = null;
   sessionCatalog = null;
   sessionHistoryStore = null;
+  sessionEndMemoryHook = null;
   sessionStartupBackfill = null;
   sessionRuntimeConfig = null;
   eventIdempotencyGuard = null;
@@ -1495,23 +1503,55 @@ try {
       cwd: process.cwd(),
       workspaceRoot: agentRegistry.config.paths.workspaceRoot,
     });
+    const activeDbClient = dbClient;
+    if (!activeDbClient) {
+      throw new Error("DB client failed to initialize");
+    }
     const activeSessionHistoryStore = sessionHistoryStore;
     if (!activeSessionHistoryStore) {
       throw new Error("Session history store failed to initialize");
     }
+    sessionEndMemoryHook = createSessionEndMemoryHook({
+      enabled: config.session.idleEviction.memoryHookEnabled,
+      anthropicApiKey,
+      sessionHistoryStore: activeSessionHistoryStore,
+      loadAgentMemoryPath: createKyselyAgentMemoryPathLoader(activeDbClient),
+      runSilentTurn: async ({ agentId, sessionKey, sourceEventId, prompt }) =>
+        runPiAgentTurn({
+          db: activeDbClient,
+          agentId,
+          agentRuntime: resolveAgentRuntimePolicy(agentId),
+          sessionKey,
+          sourceEventId,
+          prompt,
+          anthropicApiKey,
+          executorManager,
+          sessionHistoryStore: activeSessionHistoryStore,
+          sessionConfig: config.session,
+        }),
+    });
     sessionIdleEvictionCoordinator = createSessionIdleEvictionCoordinator({
       enabled: config.session.idleEviction.enabled,
       idleTimeoutMs: config.session.idleEviction.timeoutMs,
       onSessionIdle: async (event) => {
-        if (sessionCatalog) {
-          await sessionCatalog.closeSession({ sessionKey: event.sessionKey });
-        }
-
-        if (config.session.idleEviction.memoryHookEnabled) {
-          console.warn(
-            `[gravity][warning] session-end memory hook scaffold fired (agentId=${event.agentId} sessionKey=${event.sessionKey} reason=${event.reason}); silent memory-write turn is not yet implemented`,
-          );
-        }
+        await runSessionIdleCloseFlow({
+          event,
+          memoryHook: sessionEndMemoryHook,
+          closeSessionIfUnchanged: async ({
+            sessionKey,
+            expectedLastActivityAt,
+            closedAt,
+          }) => {
+            if (sessionCatalog) {
+              return sessionCatalog.closeSessionIfUnchanged({
+                sessionKey,
+                expectedLastActivityAt,
+                closedAt,
+              });
+            }
+            return false;
+          },
+        });
       },
     });
     eventIdempotencyGuard = createEventIdempotencyGuard(

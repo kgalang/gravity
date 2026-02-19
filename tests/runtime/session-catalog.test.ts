@@ -20,6 +20,12 @@ type CapturedRecord = {
 class FakeSessionCatalogRepository implements SessionCatalogRepository {
   readonly records: CapturedRecord[] = [];
   readonly closeRecords: Array<{ sessionKey: string; closedAt: Date }> = [];
+  readonly guardedCloseRecords: Array<{
+    sessionKey: string;
+    expectedLastActivityAt: Date;
+    closedAt: Date;
+  }> = [];
+  guardedCloseResult = true;
 
   async upsertSession(record: CapturedRecord): Promise<void> {
     this.records.push(record);
@@ -30,6 +36,15 @@ class FakeSessionCatalogRepository implements SessionCatalogRepository {
     closedAt: Date;
   }): Promise<void> {
     this.closeRecords.push(input);
+  }
+
+  async closeSessionIfUnchanged(input: {
+    sessionKey: string;
+    expectedLastActivityAt: Date;
+    closedAt: Date;
+  }): Promise<boolean> {
+    this.guardedCloseRecords.push(input);
+    return this.guardedCloseResult;
   }
 }
 
@@ -100,5 +115,34 @@ describe("createSessionCatalog", () => {
     expect(repository.closeRecords).toHaveLength(1);
     expect(repository.closeRecords[0]?.sessionKey).toBe("data-analyst:abc123");
     expect(repository.closeRecords[0]?.closedAt).toBeInstanceOf(Date);
+  });
+
+  it("applies guarded close only when last activity is unchanged", async () => {
+    const repository = new FakeSessionCatalogRepository();
+    const catalog = createSessionCatalog(repository);
+    const expectedLastActivityAt = new Date("2026-02-19T00:00:00.000Z");
+    const closedAt = new Date("2026-02-19T00:10:00.000Z");
+
+    const firstResult = await catalog.closeSessionIfUnchanged({
+      sessionKey: " data-analyst:abc123 ",
+      expectedLastActivityAt,
+      closedAt,
+    });
+    expect(firstResult).toBe(true);
+    expect(repository.guardedCloseRecords).toHaveLength(1);
+    expect(repository.guardedCloseRecords[0]).toEqual({
+      sessionKey: "data-analyst:abc123",
+      expectedLastActivityAt,
+      closedAt,
+    });
+
+    repository.guardedCloseResult = false;
+    const secondResult = await catalog.closeSessionIfUnchanged({
+      sessionKey: "data-analyst:abc123",
+      expectedLastActivityAt,
+    });
+    expect(secondResult).toBe(false);
+    expect(repository.guardedCloseRecords).toHaveLength(2);
+    expect(repository.guardedCloseRecords[1]?.closedAt).toBeInstanceOf(Date);
   });
 });

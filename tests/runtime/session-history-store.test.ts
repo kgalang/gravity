@@ -114,6 +114,16 @@ describe("createSessionHistoryStore", () => {
       sourceEventId: "event-system-1",
       messageTs: "1700000001.300",
     });
+    await store.appendSessionLog({
+      agentId: "data-analyst",
+      sessionKey: "data-analyst:thread-2",
+      role: "system",
+      text: "session-end internal memory hook prompt",
+      sourceEventId: "event-system-memory-hook-1",
+      metadata: {
+        phase: "memory_hook_input",
+      },
+    });
 
     const paths = await store.ensureSessionScaffold("data-analyst", "data-analyst:thread-2");
     const sessionManager = SessionManager.open(paths.contextPath, paths.sessionDir);
@@ -146,6 +156,14 @@ describe("createSessionHistoryStore", () => {
       excludeSourceEventId: null,
     });
     expect(thirdSync).toBe(0);
+
+    const finalContext = sessionManager.buildSessionContext();
+    const finalMessages = finalContext.messages
+      .map((message) => JSON.stringify(message))
+      .join("\n");
+    expect(finalMessages).toContain("[user:U111] first user message");
+    expect(finalMessages).toContain("[system] scheduled health check");
+    expect(finalMessages).not.toContain("session-end internal memory hook prompt");
 
     const latestMessageTs = await store.getLatestLoggedMessageTs(
       "data-analyst",
