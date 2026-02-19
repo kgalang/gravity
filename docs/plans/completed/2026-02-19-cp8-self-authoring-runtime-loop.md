@@ -1,6 +1,6 @@
 # CP8 Plan (Self-Authoring Mutation Flow)
 
-Status: active
+Status: complete
 Owner: kevin + codex
 Last Updated: 2026-02-19
 Thread: cp8-self-authoring-runtime-loop
@@ -29,7 +29,7 @@ Required artifacts:
 
 ## Scope Decision
 CP8 focuses on self-authoring mutation correctness and operational safety for single-process demo runtime.
-CP9 second-agent behavior and post-demo orchestration complexity remain out of scope.
+CP9 compliance-assistant rollout and policy-pack expansion remain out of scope.
 
 ## Runtime Boundary Contract (CP8)
 - New runtime complexity introduced in CP8 must be documented as an explicit interface boundary in `docs/architecture/interfaces.md` with owner and rollback path before checkpoint close.
