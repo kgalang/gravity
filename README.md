@@ -3,6 +3,7 @@
 Gravity is a framework for building agents that amplify expert operators.
 
 Instead of shipping one-off bots, Gravity is designed to create compounding leverage:
+
 - each new agent is faster to launch,
 - and the marginal maintenance cost per deployed agent decreases as shared platform pieces improve.
 
@@ -13,6 +14,7 @@ The project is inspired by OpenClaw-style gateway patterns and pi-style runtime 
 Many organizations have expert operators whose judgment becomes a bottleneck. Gravity exists to encode that judgment into reusable agents so expertise is distributed, not trapped in a few individuals.
 
 The objective is amplification, not replacement:
+
 - preserve expert quality,
 - increase expert reach,
 - and improve decision speed.
@@ -43,6 +45,7 @@ This model keeps new agents compositional and predictable: you assemble known pa
 ## Boundaries
 
 The platform keeps boundaries explicit:
+
 - runtime orchestration handles routing, scheduling, and agent execution flow,
 - Postgres stores queryable, auditable operational state,
 - `store/` keeps durable versioned knowledge (skills, resources, memory),
@@ -53,9 +56,29 @@ This split keeps the system observable and replaceable as the platform grows.
 ## Scope Today
 
 Current scope is platform-first:
+
 - shared foundations for multi-agent development,
 - reusable primitives across domains,
 - clear contracts for growth without agent-by-agent rewrites.
+
+## Post-Demo Roadmap (Teaser)
+
+### Evals and Observability
+
+- Phoenix integrations for eval tracing, comparisons, and regression review
+- central management views for cross-agent performance and operational health
+- scheduled "sleep-window" compute to review per-agent session quality and surface follow-ups
+
+### Security and Permission Rollout
+
+- sandboxed tool execution as the primary security milestone (executor layer)
+- deeper permissioning for agent actions, self-authoring controls, and team-scoped authority
+- rollout strategies from limited cohorts to broad release, with explicit promotion gates
+
+### Queueing and Concurrency
+
+- Postgres-backed job queueing for durable execution, retries, and predictable throughput
+- concurrency controls that keep multi-agent workloads stable as volume grows
 
 ## Quickstart
 
