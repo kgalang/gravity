@@ -93,7 +93,6 @@ Current scope is platform-first:
 
 ## Canonical Docs
 
-- [MVP requirements](mvp_requirements.md)
 - [Interface boundaries](docs/architecture/interfaces.md)
 - [System map](docs/architecture/system-map.md)
 - [Docs index](docs/README.md)
