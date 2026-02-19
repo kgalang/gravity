@@ -1,6 +1,6 @@
 # MVP Checkpoint Status
 
-Last Updated: 2026-02-18
+Last Updated: 2026-02-19
 
 | Checkpoint | Status | Notes | Verification |
 | --- | --- | --- | --- |
@@ -11,12 +11,12 @@ Last Updated: 2026-02-18
 | CP5 | complete | Run logging and `store/` conventions are verified with a DB-backed CP5 harness (`npm run verify:cp5`), store-convention invariants, explicit shared skill contracts (`query-gravity`, `rollback`), and evidence queries across slash/non-slash/proactive/failure run dimensions. | `docs/plans/completed/2026-02-18-cp5-run-logging-store-conventions.md`, `docs/checkpoints/cp5-verification.md`, `npm run verify:cp5`, `docker compose exec -T postgres psql -U gravity -d gravity -c "SELECT trigger_kind, entrypoint, status, count(*) AS run_count FROM gravity.runs GROUP BY trigger_kind, entrypoint, status ORDER BY trigger_kind, entrypoint, status;"` |
 | CP5.1 | complete | Rearchitecture parity checkpoint is complete: contracts/registry/declaration compilation, slash/message/proactive cutovers, `ExecutorManager` seam consolidation, legacy JSONB seam removal, first-class `useCapabilities[]` + `bindResources` contracts, and parity gates all passed (`verify:cp5`, `verify:cp10`, `check`, `lint:repo`). | `docs/plans/completed/2026-02-18-cp5-1-rearchitecture-parity.md`, `docs/architecture/rearchitecture-decision.md`, `agents/index.ts`, `agents/contracts.ts`, `src/index.ts`, `src/runtime/session-key.ts`, `src/runtime/executor-manager.ts`, `src/runtime/proactive-trigger-scheduler.ts` |
 | CP6 | complete | Session + memory scaffolding is implemented: dual-history store (`log.jsonl` + `context.jsonl` + `agent-log.jsonl`), pre-run sync + startup backfill seams, per-turn memory reload, overflow compaction-retry recovery, idle-eviction memory-hook scaffold, and fail-closed CP6 config warnings. | `docs/checkpoints/cp6-verification.md`, `npm run verify:cp6`, `npm run check` |
-| CP7 | not_started | Session/memory matrix is now unblocked by CP6 completion. | N/A |
+| CP7 | complete | Session-end memory reliability is implemented: idle-close silent memory hook execution, deterministic skip guards (`missing_api_key`, `missing_memory_path`), replay exclusion for internal hook records (`skipContextReplay`), and guarded stale-close behavior (`closeSessionIfUnchanged`) with fallback when hook execution fails. | `docs/checkpoints/cp7-verification.md`, `npm run verify:cp7`, `npm run check` |
 | CP8 | not_started | Self-authoring runtime loop not implemented yet. | N/A |
 | CP9 | not_started | Second agent runtime behavior not implemented yet. | N/A |
 | CP10 | complete | Proactive runtime now includes replay/backfill reconciliation from durable run history, manual wake controls (`!wake` command text on mapped slash commands), and quiet-hours suppression with optional manual bypass. CP10 verification harness validates replay/manual/quiet-hours behavior and proactive run-log persistence contracts. | `docs/plans/completed/2026-02-18-cp10-proactive-validation-hardening.md`, `docs/checkpoints/cp10-verification.md`, `npm run verify:cp10`, `src/runtime/proactive-trigger-scheduler.ts` |
 | CP11 | not_started | Demo polish and rehearsal not started. | N/A |
 
 ## Next Milestones
-- Execute CP7 reliability/session matrix now that CP6 scaffolding is complete.
 - Define CP8 self-authoring loop implementation slices.
+- Plan CP9 second-agent runtime behavior rollout.
