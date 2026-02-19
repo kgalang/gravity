@@ -1,6 +1,6 @@
 # CP7 Plan (Session-End Memory Hook Reliability)
 
-Status: active
+Status: complete
 Owner: kevin + codex
 Last Updated: 2026-02-19
 Thread: cp7-session-end-memory-hook-reliability
@@ -11,7 +11,7 @@ CP6 session and memory scaffolding is complete and verified.
 Resume evidence:
 - `docs/plans/completed/2026-02-18-cp6-sessions-memory-scaffolding.md` exit criteria are met.
 - `docs/checkpoints/cp6-verification.md` contracts are green (`npm run verify:cp6`).
-- Runtime still logs session-end memory hook as scaffold-only behavior in `src/index.ts`.
+- Runtime now executes a real idle-close silent memory hook and guarded close flow in `src/index.ts`.
 
 ## Goal
 Close CP7 by implementing and validating a real session-end silent memory write hook so idle sessions persist durable learnings to `MEMORY.md` before close.

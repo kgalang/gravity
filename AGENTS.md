@@ -5,7 +5,7 @@ This repository follows a harness-oriented workflow: docs first, clear interface
 ## Fast Map
 - Canonical docs index: [docs/README.md](docs/README.md)
 - Canonical rearchitecture decision: [docs/architecture/rearchitecture-decision.md](docs/architecture/rearchitecture-decision.md)
-- Current execution plan: [docs/plans/active/2026-02-18-cp7-session-end-memory-hook-reliability.md](docs/plans/active/2026-02-18-cp7-session-end-memory-hook-reliability.md)
+- Current execution plan: [docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md](docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md)
 - Checkpoint board: [docs/checkpoints/mvp-status.md](docs/checkpoints/mvp-status.md)
 - CP6 verification matrix: [docs/checkpoints/cp6-verification.md](docs/checkpoints/cp6-verification.md)
 - CP7 verification matrix: [docs/checkpoints/cp7-verification.md](docs/checkpoints/cp7-verification.md)

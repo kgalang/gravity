@@ -12,11 +12,11 @@ Last Updated: 2026-02-19
 | CP5.1 | complete | Rearchitecture parity checkpoint is complete: contracts/registry/declaration compilation, slash/message/proactive cutovers, `ExecutorManager` seam consolidation, legacy JSONB seam removal, first-class `useCapabilities[]` + `bindResources` contracts, and parity gates all passed (`verify:cp5`, `verify:cp10`, `check`, `lint:repo`). | `docs/plans/completed/2026-02-18-cp5-1-rearchitecture-parity.md`, `docs/architecture/rearchitecture-decision.md`, `agents/index.ts`, `agents/contracts.ts`, `src/index.ts`, `src/runtime/session-key.ts`, `src/runtime/executor-manager.ts`, `src/runtime/proactive-trigger-scheduler.ts` |
 | CP6 | complete | Session + memory scaffolding is implemented: dual-history store (`log.jsonl` + `context.jsonl` + `agent-log.jsonl`), pre-run sync + startup backfill seams, per-turn memory reload, overflow compaction-retry recovery, idle-eviction memory-hook scaffold, and fail-closed CP6 config warnings. | `docs/checkpoints/cp6-verification.md`, `npm run verify:cp6`, `npm run check` |
 | CP7 | complete | Session-end memory reliability is implemented: idle-close silent memory hook execution, deterministic skip guards (`missing_api_key`, `missing_memory_path`), replay exclusion for internal hook records (`skipContextReplay`), and guarded stale-close behavior (`closeSessionIfUnchanged`) with fallback when hook execution fails. | `docs/checkpoints/cp7-verification.md`, `npm run verify:cp7`, `npm run check` |
-| CP8 | not_started | Self-authoring runtime loop not implemented yet. | N/A |
+| CP8 | in_progress | Self-authoring runtime loop implementation is now active in the current execution plan; checkpoint and documentation updates are underway. | `docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md` |
 | CP9 | not_started | Second agent runtime behavior not implemented yet. | N/A |
 | CP10 | complete | Proactive runtime now includes replay/backfill reconciliation from durable run history, manual wake controls (`!wake` command text on mapped slash commands), and quiet-hours suppression with optional manual bypass. CP10 verification harness validates replay/manual/quiet-hours behavior and proactive run-log persistence contracts. | `docs/plans/completed/2026-02-18-cp10-proactive-validation-hardening.md`, `docs/checkpoints/cp10-verification.md`, `npm run verify:cp10`, `src/runtime/proactive-trigger-scheduler.ts` |
 | CP11 | not_started | Demo polish and rehearsal not started. | N/A |
 
 ## Next Milestones
-- Define CP8 self-authoring loop implementation slices.
+- Execute CP8 self-authoring loop implementation slices.
 - Plan CP9 second-agent runtime behavior rollout.

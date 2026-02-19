@@ -291,7 +291,7 @@ Control: this doc stays authoritative, `docs/README.md` links to it, and rollbac
 ## Engineer Takeover Checklist
 1. Read this document first.
 2. Read `docs/architecture/system-map.md` and `docs/architecture/interfaces.md` for current runtime topology.
-3. Read `docs/plans/active/2026-02-18-cp7-session-end-memory-hook-reliability.md` for active execution details.
+3. Read `docs/plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md` for active execution details.
 4. Run `npm run check` and both verification harnesses (`npm run verify:cp5`, `npm run verify:cp10`).
 5. Confirm removed legacy modules do not exist/import anywhere in runtime paths.
 

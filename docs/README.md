@@ -13,7 +13,7 @@ These docs are the canonical source of truth for architecture, execution status,
 - [CP6 verification matrix](checkpoints/cp6-verification.md)
 - [CP7 verification matrix](checkpoints/cp7-verification.md)
 - [CP10 verification matrix](checkpoints/cp10-verification.md)
-- [Active plan](plans/active/2026-02-18-cp7-session-end-memory-hook-reliability.md)
+- [Active plan](plans/active/2026-02-19-cp8-self-authoring-runtime-loop.md)
 - [Planning model](PLANS.md)
 - [Harness practices mapping](harness/practices.md)
 - [Merge gates policy](policies/merge-gates.md)
