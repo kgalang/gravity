@@ -22,7 +22,7 @@ CP7 focuses on session-end memory reliability only:
 - enforce deterministic skip/failure behavior,
 - and add verification/tests for meaningful behavioral guarantees.
 
-Do not expand scope to CP8 self-authoring automation or CP11 demo polish.
+Do not expand scope to CP8 self-authoring automation.
 
 ## CP7 In/Out
 - In scope: session-end memory hook runtime module, idle-eviction integration order (`memory hook -> close session`), CP7 verification matrix + harness, and architecture/reliability doc updates.

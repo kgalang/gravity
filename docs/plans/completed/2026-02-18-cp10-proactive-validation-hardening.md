@@ -12,7 +12,7 @@ CP10 work now focuses on runtime validation and operational seams around existin
 
 ## CP10 In/Out
 - In scope: live proactive trigger validation (`channel_thread` + `dm` delivery), replay/backfill behavior, manual wake trigger tooling, and quiet-hours verification.
-- Out of scope: CP6 session compaction internals, CP7 memory test matrix expansion, and CP11 demo polish scripting.
+- Out of scope: CP6 session compaction internals and CP7 memory test matrix expansion.
 
 ## Work Items
 - [x] Define CP10 validation matrix for proactive `cron` and `heartbeat` triggers across delivery modes.

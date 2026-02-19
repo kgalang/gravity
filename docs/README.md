@@ -16,7 +16,6 @@ These docs are the canonical source of truth for architecture, execution status,
 - [CP8 verification matrix](checkpoints/cp8-verification.md)
 - [CP9 verification matrix](checkpoints/cp9-verification.md)
 - [CP10 verification matrix](checkpoints/cp10-verification.md)
-- [Deferred CP11 plan](plans/on-hold/2026-02-19-cp11-demo-polish-rehearsal.md)
 - [Planning model](PLANS.md)
 - [Harness practices mapping](harness/practices.md)
 - [Merge gates policy](policies/merge-gates.md)

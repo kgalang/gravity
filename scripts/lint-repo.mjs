@@ -90,7 +90,6 @@ const checkpoints = [
   "CP8",
   "CP9",
   "CP10",
-  "CP11",
 ];
 
 const checkpointFile = path.join(root, "docs/checkpoints/mvp-status.md");
@@ -109,8 +108,8 @@ if (existsSync(activePlansDir)) {
     entry.endsWith(".md"),
   );
 
-  if (activePlans.length === 0) {
-    errors.push("At least one active plan is required in docs/plans/active");
+  if (activePlans.length > 1) {
+    errors.push("At most one active plan is allowed in docs/plans/active");
   }
 
   for (const plan of activePlans) {

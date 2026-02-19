@@ -11,11 +11,11 @@ Complete the CP5.1 rearchitecture so runtime behavior is driven by code-defined 
 CP5.1 is a control-plane migration checkpoint between CP5 and CP6.
 
 - In scope: code-defined `defineConfig`/`defineAgent` contracts, compiled runtime declarations, removal of JSONB-driven resolver/router modules, parity verification, and docs alignment.
-- Out of scope: CP6 session/memory scaffolding implementation details, CP7 reliability matrix, CP8 self-authoring automation, and CP11 demo polish.
+- Out of scope: CP6 session/memory scaffolding implementation details, CP7 reliability matrix, and CP8 self-authoring automation.
 
 ## CP5.1 In/Out
 - In scope: contract lock + registry assembly, declaration compilation, ingress/proactive/session cutovers, executor seam consolidation, legacy module removal, parity verification, and checkpoint/docs updates.
-- Out of scope: CP6 dual-history/compaction implementation, CP7 reliability matrix expansion, CP8 self-authoring runtime loop, and CP11 demo polish.
+- Out of scope: CP6 dual-history/compaction implementation, CP7 reliability matrix expansion, and CP8 self-authoring runtime loop.
 
 ## Step-by-Step Execution Plan (Ordered)
 

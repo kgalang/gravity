@@ -28,7 +28,7 @@ Before deeper session/compaction work, simplify the skill abstraction boundary:
 
 ## CP6 In/Out
 - In scope: skill-boundary simplification (shared catalog + explicit agent bindings), dual-history files (`log.jsonl`, `context.jsonl`), session isolation by thread/session mode, per-turn `MEMORY.md` loading contract, compaction trigger + retry behavior, startup backfill/pre-run sync seams, and session-end memory hook scaffolding.
-- Out of scope: full CP7 reliability matrix, CP8 auto-commit/self-author loop, and CP11 demo polish.
+- Out of scope: full CP7 reliability matrix and CP8 auto-commit/self-author loop.
 
 ## Work Items
 - [x] Lock docs contract: shared-skill catalog is canonical and agent-local skills folders are removal targets in this checkpoint.

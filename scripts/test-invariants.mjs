@@ -8,7 +8,7 @@ import {
 const root = process.cwd();
 const errors = [];
 
-const EXPECTED_CHECKPOINTS = Array.from({ length: 11 }, (_, index) => `CP${index + 1}`);
+const EXPECTED_CHECKPOINTS = Array.from({ length: 10 }, (_, index) => `CP${index + 1}`);
 const VALID_CHECKPOINT_STATUSES = new Set([
   "not_started",
   "in_progress",
@@ -241,11 +241,6 @@ function invariantActivePlanDiscipline() {
   const stalenessDays = parseEnvInteger("GRAVITY_PLAN_STALENESS_DAYS", DEFAULT_PLAN_STALENESS_DAYS);
 
   const activePlans = readdirSync(activeDir).filter((entry) => entry.endsWith(".md"));
-
-  if (activePlans.length === 0) {
-    addError("Expected at least one active plan in docs/plans/active");
-    return;
-  }
 
   if (activePlans.length > maxActivePlans) {
     addError(
