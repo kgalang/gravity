@@ -20,15 +20,15 @@ CP5.1 migration note:
 - `store/shared/skills`: canonical skill catalog inherited/composed by all agents (platform primitives + namespaced agent-specific modules).
 - `store/agents/{agentId}/memory/MEMORY.md`: persistent memory loaded each turn.
 
-## Session Contract (CP6)
+## Session Contract (CP6 + CP7)
 - Session key format: mode-dependent (`{agent-id}:main`, `{agent-id}:{thread_ts}`, `{agent-id}:{source_event_id}`, and proactive keys under `{agent-id}:proactive:*`).
 - Session metadata: `gravity.sessions` stores identity, mode, ownership, and last activity.
 - Permanent log: `workspace/{agent-id}/sessions/{session-key}/log.jsonl`.
 - LLM working context: `workspace/{agent-id}/sessions/{session-key}/context.jsonl`.
 - Cross-session search log: `workspace/{agent-id}/agent-log.jsonl`.
-- Pre-run sync seam: unsynced `log.jsonl` user/system entries are loaded into `context.jsonl` via source-event dedupe markers.
+- Pre-run sync seam: unsynced `log.jsonl` user/system entries are loaded into `context.jsonl` via source-event dedupe markers, while records tagged `skipContextReplay=true` remain audit-only and are excluded.
 - Startup backfill seam: active Slack thread sessions can ingest missed thread history into `log.jsonl` before normal processing.
-- Idle-session hook scaffold: idle timers close `gravity.sessions` metadata and emit a session-end memory-hook callback scaffold.
+- Idle-session close flow: idle timers execute a silent session-end memory hook turn (when enabled) and then perform guarded close (`closeSessionIfUnchanged`) so stale callbacks cannot overwrite reactivated session state.
 
 ## Integration Targets
 - Slack Socket Mode routing from slash commands, app mentions, thread replies, and direct messages via compiled code-defined listener declarations.

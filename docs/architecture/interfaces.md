@@ -13,7 +13,7 @@ Keep moving parts explicit and replaceable.
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
 - `SessionKeyBuilder` (`src/runtime/session-key.ts`): canonical builders for mode-dependent session key patterns across slash, message, and proactive entrypoints.
 - `SessionResolver`: resolves `sessionKey` and session mode (`thread`, `main`, `isolated`) per trigger.
-- `SessionCatalog`: stores and resolves session metadata in `gravity.sessions` (ownership, mode, status) while keeping full transcript/context in `workspace/` files, including explicit close transitions for idle/shutdown hooks.
+- `SessionCatalog`: stores and resolves session metadata in `gravity.sessions` (ownership, mode, status) while keeping full transcript/context in `workspace/` files, including explicit close transitions for idle/shutdown hooks and guarded stale-callback close checks (`closeSessionIfUnchanged`).
 - `ResourcePlugin` (`src/resources/types.ts`): typed resource interface (`load(...)`) with discriminated resource specs and compile-time contribution contracts.
 - `ResourceRegistry` (`src/resources/registry.ts`): statically maps all resource kinds to plugins with exhaustive compile-time coverage checks and resolves per-turn resource contributions.
 - `CapabilityCatalog` (`agents/capability-catalog.ts`): canonical catalog of capability definitions (`resourceSlots`, `skills`, and tool grants).
@@ -22,11 +22,12 @@ Keep moving parts explicit and replaceable.
 - `SkillResolver` (`src/runtime/context-assembler.ts`): resolves capability-derived shared skill IDs to shared skill markdown each turn (no caching).
 - `MemoryStore`: loads/writes `MEMORY.md` per agent.
 - `ContextAssembler` (`src/runtime/context-assembler.ts`): builds per-turn system context from compiled capability profile + memory + resource contributions.
-- `SessionHistoryStore` (`src/runtime/session-history-store.ts`): owns dual-history file contract (`log.jsonl`, `context.jsonl`, `agent-log.jsonl`) and pre-run log-to-context sync with source-event dedupe markers.
+- `SessionHistoryStore` (`src/runtime/session-history-store.ts`): owns dual-history file contract (`log.jsonl`, `context.jsonl`, `agent-log.jsonl`) and pre-run log-to-context sync with source-event dedupe markers plus explicit replay-exclusion metadata (`skipContextReplay`).
 - `SlackThreadHistory` (`src/runtime/slack-thread-history.ts`): shared thread-message contract used by Slack transport and startup backfill seams.
 - `SessionStartupBackfill` (`src/runtime/session-startup-backfill.ts`): startup seam that reconciles active Slack thread sessions and appends missed thread messages into session logs before runs.
 - `SessionOverflowRecovery` (`src/runtime/session-overflow-recovery.ts`): fail-safe helper that compacts and retries once when prompt execution throws context-overflow errors.
-- `SessionIdleEvictionCoordinator` (`src/runtime/session-idle-eviction.ts`): idle timer + callback scaffold for session-close transitions and future session-end memory write hooks.
+- `SessionIdleEvictionCoordinator` (`src/runtime/session-idle-eviction.ts`): idle timer + callback orchestrator that triggers session-end close flows (`idle_eviction` and shutdown).
+- `SessionEndMemoryHook` (`src/runtime/session-end-memory-hook.ts`): silent memory-write hook that runs a final model turn on idle close, appends hook input/output records to session log, and enforces skip guards (`missing_api_key`, `missing_memory_path`).
 - `TurnRunner` (`PiAgentRunner` for CP4/CP6): executes one model turn via `pi-coding-agent`, applies pre-run sync, compaction/retry settings, and overflow recovery.
 - `DeliveryAdapter`: posts acknowledgements/final responses using surface-specific delivery defaults.
 - `SessionStore`: implemented through `SessionHistoryStore` and `SessionManager` for per-session `log.jsonl` and `context.jsonl` lifecycle.
@@ -46,8 +47,6 @@ Keep moving parts explicit and replaceable.
 ## Non-Goals for Current Bootstrap
 - No full multi-surface adapter set beyond Slack yet.
 - No full multi-surface ingress matrix beyond Slack entrypoints yet.
-- No full CP7 reliability matrix yet.
-- Session-end memory hook remains a scaffold callback; no silent model turn writes to `MEMORY.md` yet.
 - No sandbox enforcement yet.
 
 ## Ownership and Rollback Notes
@@ -78,6 +77,8 @@ Keep moving parts explicit and replaceable.
 - `SessionOverflowRecovery` rollback path: delegate overflow handling to default `pi-coding-agent` behavior with no explicit post-error compact/retry wrapper.
 - `SessionIdleEvictionCoordinator` owner: platform runtime layer.
 - `SessionIdleEvictionCoordinator` rollback path: disable idle timers and keep sessions active until process shutdown while preserving `gravity.sessions` schema.
+- `SessionEndMemoryHook` owner: platform runtime layer.
+- `SessionEndMemoryHook` rollback path: disable `GRAVITY_SESSION_MEMORY_HOOK_ENABLED` and retain session close transitions without silent memory-write turns.
 - `ResourceRegistry` owner: platform runtime layer.
 - `ResourceRegistry` rollback path: hardcode a single resource path per agent in runtime code while preserving agent config columns.
 - `CapabilityCompiler` owner: platform runtime layer.

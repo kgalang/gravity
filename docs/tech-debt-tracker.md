@@ -1,6 +1,6 @@
 # Tech Debt Tracker
 
-Last Updated: 2026-02-18
+Last Updated: 2026-02-19
 
 | ID | Debt Item | Impact | Planned Fix |
 | --- | --- | --- | --- |
@@ -10,3 +10,4 @@ Last Updated: 2026-02-18
 | TD-004 | `schema.sql` snapshot is maintained manually | Schema snapshot can drift from `db/migrations/` over time | Add a repo check that validates `schema.sql` matches migration output |
 | TD-005 | Shutdown path does not enforce best-effort process exit when Slack disconnect fails | Runtime can hang or exit non-deterministically during SIGINT/SIGTERM under socket/network failure | Wrap Slack transport stop in guarded shutdown logic (`try/finally`), log disconnect errors, and always complete process termination |
 | TD-006 | No `npm run doctor` command for runtime/live-definition misconfiguration checks | Misconfigured agent specs, resource paths, ingress bindings, required CLIs, or runtime writability can fail late at runtime | Add `npm run doctor` with scoped runtime checks that explicitly avoid overlap with TypeScript/static guarantees |
+| TD-007 | Long-term memory strategy is currently session-end-hook-centric; no optional continuous capture mode yet | Low-volume sessions can miss durable extraction opportunities until idle close, and memory quality policy remains implicit | Post-demo: evaluate hybrid strategy (session-end hook + optional continuous capture + optional pre-compaction flush), define quality gates/telemetry, and stage rollout behind config flags |
