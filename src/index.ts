@@ -332,6 +332,7 @@ async function executeAgentRun(
     threadTs: input.lifecycleMetadata.threadTs,
     userId: input.lifecycleMetadata.userId,
     policyDecisions: input.lifecycleMetadata.policyDecisions,
+    getPolicyDecisions: () => input.lifecycleMetadata.policyDecisions ?? {},
     getResultSummary: () => resultSummary,
   });
 
@@ -491,6 +492,7 @@ async function executeSelfAuthoringRun(
     threadTs: input.lifecycleMetadata.threadTs,
     userId: input.lifecycleMetadata.userId,
     policyDecisions: input.lifecycleMetadata.policyDecisions,
+    getPolicyDecisions: () => input.lifecycleMetadata.policyDecisions ?? {},
     getResultSummary: () => resultSummary,
   });
 
@@ -590,9 +592,10 @@ function buildSlashCommandEchoResponse(
   agentId: string,
 ): SlackSlashCommandAckResponse {
   const normalizedText = command.text.length > 0 ? command.text : "(no text)";
+  const routeLabel = command.command === "/pearlboy" ? "pearlboy" : agentId;
   return {
     response_type: "ephemeral",
-    text: `Gravity routed ${command.command} to ${agentId}. Replying in thread for: ${normalizedText}`,
+    text: `Gravity routed ${command.command} to ${routeLabel}. Replying in thread for: ${normalizedText}`,
   };
 }
 
@@ -1334,6 +1337,13 @@ async function handleInboundSlashCommand(
           manual_wake_trigger_id: manualWakeDecision.triggerId ?? null,
           manual_wake_scheduler_available: Boolean(activeScheduler),
         },
+        getPolicyDecisions: () => ({
+          trigger: "slash_command",
+          response_type: decision.ackResponse.response_type,
+          manual_wake: true,
+          manual_wake_trigger_id: manualWakeDecision.triggerId ?? null,
+          manual_wake_scheduler_available: Boolean(activeScheduler),
+        }),
         getResultSummary: () => resultSummary,
       });
       const runContext = createRunContext({

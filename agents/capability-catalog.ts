@@ -72,7 +72,7 @@ export const capabilityCatalog = {
       toolPrimitives: [],
     },
     guidance: [
-      "- `compliance-helper-guidance-v1`: apply compliance helper review and red-flag detection rules.",
+      "- `compliance-helper-guidance-v1`: apply Pearlboy compliance review and red-flag detection rules.",
     ],
   },
 } as const satisfies Record<string, CapabilityDefinition>;

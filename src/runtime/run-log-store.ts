@@ -16,6 +16,7 @@ export type RunLogLifecycleMetadata = {
   userId?: string | null;
   userName?: string | null;
   policyDecisions?: Record<string, unknown>;
+  getPolicyDecisions?: () => Record<string, unknown> | null | undefined;
   getResultSummary?: () => string | null | undefined;
 };
 
@@ -39,11 +40,13 @@ export type RunStartedRecord = {
 export type RunCompletedRecord = {
   completedAt: Date;
   resultSummary: string | null;
+  policyDecisions: Record<string, unknown>;
 };
 
 export type RunFailedRecord = {
   completedAt: Date;
   errorMessage: string | null;
+  policyDecisions: Record<string, unknown>;
 };
 
 export type RunLogRepository = {
@@ -77,7 +80,17 @@ function normalizeQuery(query: string): string {
 function normalizePolicyDecisions(
   value: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
-  return value ?? {};
+  return value ? { ...value } : {};
+}
+
+function normalizePolicyDecisionsFromGetter(
+  getter: RunLogLifecycleMetadata["getPolicyDecisions"],
+): Record<string, unknown> | null {
+  if (!getter) {
+    return null;
+  }
+
+  return normalizePolicyDecisions(getter() ?? undefined);
 }
 
 function normalizeResultSummary(
@@ -118,6 +131,9 @@ export function createRunLogStore(repository: RunLogRepository): RunLogStore {
 
       return async (event) => {
         const eventTimestamp = parseLifecycleTimestamp(event);
+        const latestPolicyDecisions =
+          normalizePolicyDecisionsFromGetter(metadata.getPolicyDecisions) ??
+          policyDecisions;
 
         switch (event.stage) {
           case "started":
@@ -142,12 +158,14 @@ export function createRunLogStore(repository: RunLogRepository): RunLogStore {
             await repository.markRunCompleted(event.runId, {
               completedAt: eventTimestamp,
               resultSummary: normalizeResultSummary(metadata.getResultSummary),
+              policyDecisions: latestPolicyDecisions,
             });
             return;
           case "failed":
             await repository.markRunFailed(event.runId, {
               completedAt: eventTimestamp,
               errorMessage: normalizeNullableString(event.errorMessage),
+              policyDecisions: latestPolicyDecisions,
             });
             return;
           default:
@@ -198,6 +216,7 @@ export function createKyselyRunLogRepository(
           completed_at: record.completedAt,
           result_summary: record.resultSummary,
           error_message: null,
+          policy_decisions: record.policyDecisions,
         })
         .where("id", "=", runId)
         .executeTakeFirst();
@@ -210,6 +229,7 @@ export function createKyselyRunLogRepository(
           completed_at: record.completedAt,
           error_message: record.errorMessage,
           result_summary: null,
+          policy_decisions: record.policyDecisions,
         })
         .where("id", "=", runId)
         .executeTakeFirst();

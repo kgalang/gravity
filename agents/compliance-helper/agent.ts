@@ -2,8 +2,8 @@ import { defineAgent } from "../contracts.js";
 
 export const complianceHelperAgent = defineAgent({
   id: "compliance-helper",
-  name: "Compliance Helper",
-  description: "Compliance review proof-of-concept agent.",
+  name: "Pearlboy",
+  description: "Slack-first compliance review agent for marketing copy.",
   model: "claude-sonnet-4-5-20250929",
   runtime: "host",
   resources: [
@@ -24,6 +24,17 @@ export const complianceHelperAgent = defineAgent({
       sessionMode: "thread",
       match: {
         command: "/compliance",
+      },
+      enabled: true,
+    },
+    {
+      id: "slack-pearlboy-slash",
+      kind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
+      sessionMode: "thread",
+      match: {
+        command: "/pearlboy",
       },
       enabled: true,
     },

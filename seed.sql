@@ -94,8 +94,8 @@ INSERT INTO gravity.agents (
   ),
   (
     'compliance-helper',
-    'Compliance Helper',
-    'Compliance review proof-of-concept agent.',
+    'Pearlboy',
+    'Slack-first compliance review agent for marketing copy.',
     'claude-sonnet-4-5-20250929',
     'active',
     'C0AFYK6AVQR',
@@ -110,6 +110,15 @@ INSERT INTO gravity.agents (
           'surface', 'slack',
           'entrypoint', 'slash_command',
           'match', jsonb_build_object('command', '/compliance'),
+          'sessionMode', 'thread',
+          'enabled', true
+        ),
+        jsonb_build_object(
+          'id', 'slack-pearlboy-slash',
+          'kind', 'message',
+          'surface', 'slack',
+          'entrypoint', 'slash_command',
+          'match', jsonb_build_object('command', '/pearlboy'),
           'sessionMode', 'thread',
           'enabled', true
         ),

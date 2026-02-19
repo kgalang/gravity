@@ -64,6 +64,22 @@ describe("agentRegistry", () => {
         runIdPattern: "slack:{sourceEventId}",
       },
     });
+    expect(agentRegistry.slashCommandListeners.get("/pearlboy")).toEqual({
+      agentId: "compliance-helper",
+      listenerId: "slack-pearlboy-slash",
+      command: "/pearlboy",
+      sessionMode: "thread",
+      entrypoint: "slash_command",
+      match: {
+        command: "/pearlboy",
+      },
+      trigger: {
+        triggerKind: "message",
+        surface: "slack",
+        entrypoint: "slash_command",
+        runIdPattern: "slack:{sourceEventId}",
+      },
+    });
 
     expect(
       agentRegistry.compiledDeclarations.ingress.slashCommands["/wiggs"],
@@ -78,7 +94,7 @@ describe("agentRegistry", () => {
         runIdPattern: "slack:{sourceEventId}",
       },
     });
-    expect(agentRegistry.compiledDeclarations.ingress.listeners.length).toBe(8);
+    expect(agentRegistry.compiledDeclarations.ingress.listeners.length).toBe(9);
     expect(
       agentRegistry.compiledDeclarations.ingress.messageByEntrypoint.app_mention
         .length,
@@ -92,8 +108,8 @@ describe("agentRegistry", () => {
         .length,
     ).toBe(2);
     expect(agentRegistry.compiledDeclarations.proactive.triggers).toEqual([]);
-    expect(agentRegistry.compiledDeclarations.sessions.dimensions.length).toBe(8);
-    expect(agentRegistry.compiledDeclarations.triggerDimensions.length).toBe(8);
+    expect(agentRegistry.compiledDeclarations.sessions.dimensions.length).toBe(9);
+    expect(agentRegistry.compiledDeclarations.triggerDimensions.length).toBe(9);
   });
 });
 

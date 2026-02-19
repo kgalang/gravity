@@ -138,6 +138,52 @@ describe("createRunLogStore", () => {
     ).toThrow("Run log metadata query must be non-empty");
   });
 
+  it("updates policy decisions on completion from getter", async () => {
+    const repository = new FakeRunLogRepository();
+    const store = createRunLogStore(repository);
+    const policyDecisions: Record<string, unknown> = {
+      compliance_review: true,
+      compliance_verdict: "pending",
+    };
+
+    const logger = store.createLifecycleLogger({
+      query: "/compliance draft",
+      sourceEventId: "trigger-3",
+      policyDecisions,
+      getPolicyDecisions: () => policyDecisions,
+    });
+
+    const runContext = createRunContext({
+      runId: "slack:trigger-3",
+      agentId: "compliance-helper",
+      sessionKey: "compliance-helper:trigger-3",
+      triggerKind: "message",
+      surface: "slack",
+      entrypoint: "slash_command",
+    });
+
+    await withRunLifecycle(runContext, logger, async () => {
+      policyDecisions.compliance_verdict = "block";
+      policyDecisions.compliance_flag_count = 2;
+    });
+
+    expect(repository.started[0]).toMatchObject({
+      policyDecisions: {
+        compliance_review: true,
+        compliance_verdict: "pending",
+      },
+    });
+    expect(repository.completed[0]).toMatchObject({
+      record: {
+        policyDecisions: {
+          compliance_review: true,
+          compliance_verdict: "block",
+          compliance_flag_count: 2,
+        },
+      },
+    });
+  });
+
   it("persists trigger dimensions across non-slash and proactive runs", async () => {
     const repository = new FakeRunLogRepository();
     const store = createRunLogStore(repository);
