@@ -61,7 +61,7 @@ Current scope is platform-first:
 - reusable primitives across domains,
 - clear contracts for growth without agent-by-agent rewrites.
 
-## Post-Demo Roadmap (Teaser)
+## Upcoming Features
 
 ### Evals and Observability
 
