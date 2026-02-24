@@ -27,6 +27,11 @@ export type SelfAuthoringRuntimeConfig = Readonly<{
   queueMaxDepth: number;
 }>;
 
+export type SandboxRuntimeConfig = Readonly<{
+  enabled: boolean;
+  forceHost: boolean;
+}>;
+
 export type AppConfig = {
   env: string;
   databaseUrl: string;
@@ -36,6 +41,7 @@ export type AppConfig = {
   anthropicApiKey: string | null;
   session: SessionRuntimeConfig;
   selfAuthoring: SelfAuthoringRuntimeConfig;
+  sandbox: SandboxRuntimeConfig;
   runtimeWarnings: readonly string[];
 };
 
@@ -304,6 +310,40 @@ function resolveSelfAuthoringRuntimeConfig(
   };
 }
 
+function resolveSandboxRuntimeConfig(
+  env: NodeJS.ProcessEnv,
+  warnings: string[],
+): SandboxRuntimeConfig {
+  const enabled = parseFeatureBoolean({
+    env,
+    key: "GRAVITY_SANDBOX_ENABLED",
+    defaultValue: true,
+    warnings,
+  });
+  const forceHost = parseFeatureBoolean({
+    env,
+    key: "GRAVITY_SANDBOX_FORCE_HOST",
+    defaultValue: false,
+    warnings,
+  });
+
+  if (enabled && forceHost) {
+    warnings.push(
+      "Sandbox force-host mode is enabled; sandbox runtime requests are denied fail-closed.",
+    );
+  }
+  if (!enabled) {
+    warnings.push(
+      "Sandbox runtime is globally disabled; agents with runtime=sandbox will be policy-denied.",
+    );
+  }
+
+  return {
+    enabled,
+    forceHost,
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const databaseUrlEnvVar = runtimeConfig.infra.database.urlEnvVar;
   const slackAppTokenEnvVar = runtimeConfig.infra.slack.appTokenEnvVar;
@@ -332,6 +372,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     anthropicApiKey: normalizeOptionalEnv(env[modelApiKeyEnvVar]),
     session: resolveSessionRuntimeConfig(env, runtimeWarnings),
     selfAuthoring: resolveSelfAuthoringRuntimeConfig(env, runtimeWarnings),
+    sandbox: resolveSandboxRuntimeConfig(env, runtimeWarnings),
     runtimeWarnings,
   };
 }

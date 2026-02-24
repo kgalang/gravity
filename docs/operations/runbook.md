@@ -60,6 +60,10 @@ SELECT id, name, status, channel_id FROM gravity.agents;
    - `store/shared/skills/compliance-helper-flag-patterns.md`
 5. Inspect CP9 matrix context in `docs/checkpoints/cp9-verification.md` when needed for historical rollout evidence.
 
+## Sandbox Runtime Knobs
+1. `GRAVITY_SANDBOX_ENABLED=true|false` (default `true`; keeps sandbox available for agents that opt into `runtime: "sandbox"`)
+2. `GRAVITY_SANDBOX_FORCE_HOST=true|false` (emergency force-host mode; sandbox-declared runs are denied fail-closed instead of silently downgraded to host runtime)
+
 ## Notes
 - `db/migrations/` is the source of truth for schema changes; `schema.sql` is a bootstrap snapshot.
 - `seed.sql` contains workspace-specific Slack `channel_id` values. Update them before applying in a different workspace.

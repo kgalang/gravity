@@ -33,7 +33,7 @@ Keep moving parts explicit and replaceable.
 - `SessionStore`: implemented through `SessionHistoryStore` and `SessionManager` for per-session `log.jsonl` and `context.jsonl` lifecycle.
 - `RunLifecycleLogger` (`src/runtime/run-lifecycle.ts`): emits typed run lifecycle events with stable IDs (`runId`, `agentId`, `sessionKey`) and lifecycle stages (`started`, `completed`, `failed`).
 - `RunLogStore` (`src/runtime/run-log-store.ts`): maps lifecycle stages into durable `gravity.runs` inserts/updates.
-- `ExecutorManager` (`src/runtime/executor-manager.ts`): single executor dispatch seam for all tool execution with per-agent runtime selection (`host` default, sandbox scaffold disabled).
+- `ExecutorManager` (`src/runtime/executor-manager.ts`): single executor dispatch seam for all tool execution with per-agent runtime selection, fail-closed sandbox policy decisions (`allow`/`deny` + reason), and force-host fail-closed mode (`GRAVITY_SANDBOX_FORCE_HOST` denies sandbox-declared runs).
 - `ToolDispatcher`: single dispatch seam for all tool execution (implemented through `ExecutorManager` in current runtime).
 - `ProactiveTriggerScheduler` (`src/runtime/proactive-trigger-scheduler.ts`): runs cron/heartbeat triggers, replays missed proactive runs from persisted history, enforces quiet-hours suppression, and exposes manual wake control for heartbeat demo triggers.
 
@@ -60,7 +60,7 @@ Keep moving parts explicit and replaceable.
 ## Non-Goals for Current Bootstrap
 - No full multi-surface adapter set beyond Slack yet.
 - No full multi-surface ingress matrix beyond Slack entrypoints yet.
-- No sandbox enforcement yet.
+- No full sandbox approval-state workflow yet (`request_id`, timeout, cancel, pending states; TD-008).
 
 ## Ownership and Rollback Notes
 - Legacy seam rollback: removed CP5.1 seams are restored only via revision revert.
@@ -105,7 +105,7 @@ Keep moving parts explicit and replaceable.
 - `RunLogStore` owner: platform runtime layer.
 - `RunLogStore` rollback path: keep lifecycle log lines but disable `gravity.runs` writes from `src/index.ts` while retaining the DB schema contract.
 - `ExecutorManager` owner: platform runtime layer.
-- `ExecutorManager` rollback path: revert `pi-agent-runner` tool wiring to direct host tool construction while keeping runtime policy fields backward-compatible.
+- `ExecutorManager` rollback path: block sandbox-declared runs by setting `GRAVITY_SANDBOX_FORCE_HOST=true` (or `GRAVITY_SANDBOX_ENABLED=false`) while keeping runtime policy fields backward-compatible.
 - `ProactiveTriggerScheduler` owner: platform runtime layer.
 - `ProactiveTriggerScheduler` rollback path: disable scheduler startup and replay/wake control surfaces while preserving `proactiveTriggers` config contracts.
 - `SelfAuthoringMutationCoordinator` owner: platform runtime layer.

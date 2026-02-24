@@ -39,6 +39,10 @@ describe("loadConfig", () => {
         enabled: true,
         queueMaxDepth: 8,
       },
+      sandbox: {
+        enabled: true,
+        forceHost: false,
+      },
       runtimeWarnings: [],
     });
   });
@@ -59,6 +63,10 @@ describe("loadConfig", () => {
     expect(config.selfAuthoring).toEqual({
       enabled: true,
       queueMaxDepth: 8,
+    });
+    expect(config.sandbox).toEqual({
+      enabled: true,
+      forceHost: false,
     });
     expect(config.runtimeWarnings).toEqual([]);
   });
@@ -100,6 +108,8 @@ describe("loadConfig", () => {
       GRAVITY_SESSION_IDLE_EVICTION_MINUTES: "0",
       GRAVITY_SESSION_MEMORY_HOOK_ENABLED: "true",
       GRAVITY_SELF_AUTHORING_QUEUE_MAX_DEPTH: "zero",
+      GRAVITY_SANDBOX_ENABLED: "maybe",
+      GRAVITY_SANDBOX_FORCE_HOST: "also-maybe",
     });
 
     expect(config.session.preRunSyncEnabled).toBe(false);
@@ -108,6 +118,32 @@ describe("loadConfig", () => {
     expect(config.session.idleEviction.enabled).toBe(false);
     expect(config.session.idleEviction.memoryHookEnabled).toBe(false);
     expect(config.selfAuthoring.queueMaxDepth).toBe(8);
+    expect(config.sandbox).toEqual({
+      enabled: false,
+      forceHost: false,
+    });
+    expect(config.runtimeWarnings.some((warning) => warning.includes("GRAVITY_SANDBOX_ENABLED"))).toBe(true);
+    expect(
+      config.runtimeWarnings.some((warning) => warning.includes("GRAVITY_SANDBOX_FORCE_HOST")),
+    ).toBe(true);
+    expect(config.runtimeWarnings.length).toBeGreaterThan(0);
+  });
+
+  it("warns when sandbox force-host mode denies sandbox runtime", () => {
+    const config = loadConfig({
+      GRAVITY_SANDBOX_ENABLED: "true",
+      GRAVITY_SANDBOX_FORCE_HOST: "true",
+    });
+
+    expect(config.sandbox).toEqual({
+      enabled: true,
+      forceHost: true,
+    });
+    expect(
+      config.runtimeWarnings.some((warning) =>
+        warning.includes("sandbox runtime requests are denied fail-closed"),
+      ),
+    ).toBe(true);
     expect(config.runtimeWarnings.length).toBeGreaterThan(0);
   });
 });

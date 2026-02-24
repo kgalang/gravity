@@ -42,4 +42,7 @@ CP5.1 migration note:
 - CP9 Pearlboy compliance flow is routed through the standard agent runtime (same turn engine as other agents) and uses shared compliance skills to produce conversational review guidance in Slack threads.
 - Claude API loop with compaction and tool-result truncation from `mvp_requirements.md`.
 - CP6 fail-closed runtime config: invalid session/compaction/retry/hook settings disable feature activation and emit runtime warnings.
+- Sandbox execution boundary is enforced in `ExecutorManager`: sandbox requests use a fail-closed policy decision contract (`allow`/`deny` + reason) before tool dispatch.
+- Sandbox force-host mode is explicit: `GRAVITY_SANDBOX_FORCE_HOST=true` denies sandbox-declared runs fail-closed (no silent host downgrade).
+- Sandbox decision metadata is persisted into `gravity.runs.policy_decisions` with stable-ID linkage (`runId`, `agentId`, `sessionKey`).
 - DuckDB resource at `/Users/kevingalang/code/jaffle_shop_duckdb/jaffle_shop.duckdb` for Wiggs.

@@ -22,6 +22,7 @@ import type { Kysely } from "kysely";
 import { gravitySchema, type GravityDatabase } from "./db.js";
 import type { SessionRuntimeConfig } from "./config.js";
 import type {
+  ExecutorResolution,
   ExecutorManager,
   ExecutorRuntime,
 } from "./executor-manager.js";
@@ -54,6 +55,7 @@ type AgentAssistantMessage = Static<typeof AgentAssistantMessageSchema>;
 
 export type RunPiAgentTurnInput = {
   db: Kysely<GravityDatabase>;
+  runId?: string;
   agentId: string;
   agentRuntime: ExecutorRuntime;
   sessionKey: string;
@@ -65,9 +67,19 @@ export type RunPiAgentTurnInput = {
   sessionConfig: SessionRuntimeConfig;
 };
 
+export type RunPiAgentTurnSandboxMetadata = Readonly<{
+  decision: "allow" | "deny";
+  reason: string;
+  requestedRuntime: ExecutorRuntime;
+  effectiveRuntime: ExecutorRuntime;
+  rollbackApplied: boolean;
+  outcome: "executed" | "policy_denied";
+}>;
+
 export type RunPiAgentTurnResult = {
   responseText: string;
   modelId: string;
+  sandbox: RunPiAgentTurnSandboxMetadata;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -227,9 +239,61 @@ function summarizeForRunLog(responseText: string): string {
   return `${normalized.slice(0, 277)}...`;
 }
 
+function resolvePolicyRunId(input: RunPiAgentTurnInput): string {
+  const explicitRunId = asStringOrNull(input.runId);
+  if (explicitRunId) {
+    return explicitRunId;
+  }
+
+  const sourceEventId = asStringOrNull(input.sourceEventId);
+  if (sourceEventId) {
+    return sourceEventId;
+  }
+
+  return `${input.agentId}:${input.sessionKey}`;
+}
+
+function toSandboxMetadata(input: {
+  resolution: ExecutorResolution;
+  outcome: RunPiAgentTurnSandboxMetadata["outcome"];
+}): RunPiAgentTurnSandboxMetadata {
+  return {
+    decision: input.resolution.decision,
+    reason: input.resolution.reason,
+    requestedRuntime: input.resolution.requestedRuntime,
+    effectiveRuntime: input.resolution.effectiveRuntime,
+    rollbackApplied: input.resolution.rollbackApplied,
+    outcome: input.outcome,
+  };
+}
+
+function buildSandboxPolicyDeniedResponse(reason: string): string {
+  return [
+    "I could not execute this run because sandbox policy denied the request.",
+    `Reason: ${reason}.`,
+  ].join(" ");
+}
+
 export async function runPiAgentTurn(
   input: RunPiAgentTurnInput,
 ): Promise<RunPiAgentTurnResult> {
+  const resolution = input.executorManager.resolve({
+    requestedRuntime: input.agentRuntime,
+    runId: resolvePolicyRunId(input),
+    agentId: input.agentId,
+    sessionKey: input.sessionKey,
+  });
+  if (resolution.decision === "deny") {
+    return {
+      responseText: buildSandboxPolicyDeniedResponse(resolution.reason),
+      modelId: "sandbox-policy-denied",
+      sandbox: toSandboxMetadata({
+        resolution,
+        outcome: "policy_denied",
+      }),
+    };
+  }
+
   if (!input.anthropicApiKey) {
     throw new Error("ANTHROPIC_API_KEY is required to run Claude.");
   }
@@ -250,7 +314,7 @@ export async function runPiAgentTurn(
 
   const modelRegistry = new ModelRegistry(authStorage);
   const model = resolveAnthropicModelId(agent.model);
-  const executor = input.executorManager.resolve(input.agentRuntime);
+  const executor = resolution.executor;
   const allowedToolPrimitives = agent.compiledCapabilities.toolPrimitives;
   if (allowedToolPrimitives.length === 0) {
     throw new Error(
@@ -352,6 +416,10 @@ export async function runPiAgentTurn(
   return {
     responseText,
     modelId: model.id,
+    sandbox: toSandboxMetadata({
+      resolution,
+      outcome: "executed",
+    }),
   };
 }
 

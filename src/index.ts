@@ -183,7 +183,7 @@ process.on("SIGTERM", () => {
 });
 
 const enableSlackMessageEvents = true;
-const executorManager = createExecutorManager({ enableSandbox: false });
+let executorManager = createExecutorManager();
 
 type MessageEntrypoint = CompiledMessageEntrypoint;
 
@@ -365,6 +365,7 @@ async function executeAgentRun(
     async () => {
       const runResult = await runPiAgentTurn({
         db: input.db,
+        runId: input.runId,
         agentId: input.agentId,
         agentRuntime: resolveAgentRuntimePolicy(input.agentId),
         sessionKey: input.sessionKey,
@@ -375,6 +376,20 @@ async function executeAgentRun(
         sessionHistoryStore: input.sessionHistoryStore,
         sessionConfig: activeSessionRuntimeConfig,
       });
+      input.lifecycleMetadata.policyDecisions = {
+        ...(input.lifecycleMetadata.policyDecisions ?? {}),
+        sandbox: {
+          decision: runResult.sandbox.decision,
+          reason: runResult.sandbox.reason,
+          requested_runtime: runResult.sandbox.requestedRuntime,
+          effective_runtime: runResult.sandbox.effectiveRuntime,
+          rollback_applied: runResult.sandbox.rollbackApplied,
+          outcome: runResult.sandbox.outcome,
+          run_id: input.runId,
+          agent_id: input.agentId,
+          session_key: input.sessionKey,
+        },
+      };
 
       const responseText = runResult.responseText;
       resultSummary = summarizeAgentResponseForRunLog(responseText);
@@ -1827,6 +1842,13 @@ try {
     }
     anthropicApiKey = config.anthropicApiKey;
     console.log("[gravity] runtime scaffold active");
+    executorManager = createExecutorManager({
+      sandboxEnabled: config.sandbox.enabled,
+      forceHostRuntime: config.sandbox.forceHost,
+    });
+    console.log(
+      `[gravity] executor manager active (sandboxEnabled=${config.sandbox.enabled} forceHostRuntime=${config.sandbox.forceHost})`,
+    );
     dbClient = createDb(config.databaseUrl);
     runLogStore = createRunLogStore(createKyselyRunLogRepository(dbClient));
     sessionCatalog = createSessionCatalog(
@@ -1852,6 +1874,7 @@ try {
       runSilentTurn: async ({ agentId, sessionKey, sourceEventId, prompt }) =>
         runPiAgentTurn({
           db: activeDbClient,
+          runId: sourceEventId,
           agentId,
           agentRuntime: resolveAgentRuntimePolicy(agentId),
           sessionKey,
