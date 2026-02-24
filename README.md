@@ -21,7 +21,7 @@ With one expansion:
 - **Resources**: docs, data, and systems the agent can load into context.
 - **Surfaces**: where the agent appears and communicates (for example, Slack listeners and delivery routes).
 - **Triggers**: when the agent runs (for example, slash commands, mentions, thread replies, DMs, cron, heartbeat).
-- **Executor**: how tool calls run at runtime (host now, sandbox seam later).
+- **Executor**: how tool calls run at runtime (host or sandbox, per agent).
 - **Memory**: what persists across runs so behavior compounds over time.
 
 If you ask "where does this agent run?" map that to **surfaces**.
@@ -39,6 +39,44 @@ The platform keeps boundaries explicit:
 - `workspace/` holds ephemeral per-session runtime artifacts.
 
 This split keeps the system observable and replaceable as the platform grows.
+
+## Security Lens (Lethal Trifecta)
+
+For evaluation, use Simon Willison's "lethal trifecta" framing:
+
+1. access to private data,
+2. exposure to untrusted content,
+3. ability to externally communicate (exfiltration channel).
+
+Reference: <https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/>
+
+If an agent combines all three, treat it as high risk and sandbox by default.
+
+### When To Choose `runtime: "sandbox"` vs `runtime: "host"`
+
+- Choose `runtime: "sandbox"` when an agent can touch private systems/data and may process attacker-controlled or user-submitted content, especially if it can post/send/call out externally.
+- Keep `runtime: "host"` for low-risk internal agents where data is non-sensitive, content is trusted, and outbound actions are tightly constrained.
+- Before production rollout, move any agent that approaches the full trifecta into sandboxed execution plus stricter tool/resource policy.
+
+### How It Works Today
+
+- Runtime selection is per agent in `defineAgent(...)` via `runtime: "host" | "sandbox"`.
+- Sandbox does not need a global "on" switch to be usable per agent. It is available by default and selected per agent declaration.
+- Emergency force-host mode remains global: `GRAVITY_SANDBOX_FORCE_HOST=true` denies sandbox-declared runs fail-closed (it does not silently downgrade them to host execution).
+- Current sandbox implementation uses Anthropic SRT wrapping for bash command execution paths.
+- The execution boundary (`ExecutorManager`) is intentionally structured so this can evolve into stronger isolation profiles (for example Docker/container dispatch) without changing agent contracts.
+
+Example:
+
+```ts
+export const analystAgent = defineAgent({
+  id: "analyst",
+  name: "Analyst",
+  model: "claude-sonnet-4-5-20250929",
+  runtime: "sandbox", // opt-in per agent
+  // ...
+});
+```
 
 ## Scope Today
 
@@ -58,7 +96,7 @@ Current scope is platform-first:
 
 ### Security and Permission Rollout
 
-- sandboxed tool execution as the primary security milestone (executor layer)
+- stronger sandbox profiles (including containerized execution modes) on top of current executor boundary
 - deeper permissioning for agent actions, self-authoring controls, and team-scoped authority
 - rollout strategies from limited cohorts to broad release, with explicit promotion gates
 

@@ -5,7 +5,7 @@ export const dataAnalystAgent = defineAgent({
   name: "Wiggs",
   description: "Data analyst proof-of-concept agent.",
   model: "claude-sonnet-4-5-20250929",
-  runtime: "host",
+  runtime: "sandbox",
   resources: [
     {
       id: "warehouse",
