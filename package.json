@@ -20,6 +20,8 @@
     "test:invariants": "node scripts/test-invariants.mjs",
     "check": "npm run typecheck && npm run test:unit && npm run lint:md && npm run lint:repo && npm run test:invariants",
     "db:up": "docker compose up -d postgres",
+    "infra:up": "docker compose up -d postgres phoenix",
+    "infra:status": "docker compose ps postgres phoenix",
     "db:down": "docker compose down",
     "db:migrate": "bash scripts/db-migrate.sh",
     "db:rollback": "bash scripts/db-rollback.sh",

@@ -17,5 +17,18 @@ services:
       timeout: 5s
       retries: 20
 
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: gravity-phoenix
+    restart: unless-stopped
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - gravity-phoenix-data:/mnt/data
+
 volumes:
   gravity-pgdata:
+  gravity-phoenix-data:
