@@ -17,7 +17,7 @@ Last Updated: 2026-02-24
 | CP10 | complete | Proactive runtime now includes replay/backfill reconciliation from durable run history, manual wake controls (`!wake` command text on mapped slash commands), and quiet-hours suppression with optional manual bypass. CP10 verification harness validates replay/manual/quiet-hours behavior and proactive run-log persistence contracts. | `docs/plans/completed/2026-02-18-cp10-proactive-validation-hardening.md`, `docs/checkpoints/cp10-verification.md`, `npm run verify:cp10`, `src/runtime/proactive-trigger-scheduler.ts` |
 
 ## Next Milestones
-- Sandbox-first implementation thread: [`docs/plans/active/2026-02-24-reliability-first-sandbox-second.md`](../plans/active/2026-02-24-reliability-first-sandbox-second.md)
-- Lean fail-closed sandbox boundary is now implemented via `ExecutorManager` (policy `allow`/`deny`, force-host fail-closed mode that denies sandbox-declared runs, explicit runtime failures without silent downgrade, and stable-ID-linked decision metadata in run logs).
-- Additional hardening is intentionally tracked as tech debt for later (TD-008, TD-009).
-- `npm run doctor` remains explicitly deferred for this thread (TD-006).
+- Active implementation thread: [`docs/plans/active/2026-02-24-evals-monitoring-v1.md`](../plans/active/2026-02-24-evals-monitoring-v1.md)
+- Focus: self-hosted Phoenix via local Docker Compose, centralized risk-based review queue, and Slack `central-review` operator workflow.
+- Sandbox-first implementation thread is complete and archived: [`docs/plans/completed/2026-02-24-reliability-first-sandbox-second.md`](../plans/completed/2026-02-24-reliability-first-sandbox-second.md)
+- Additional hardening remains tracked as tech debt for later (TD-008, TD-009), and `npm run doctor` remains deferred (TD-006).

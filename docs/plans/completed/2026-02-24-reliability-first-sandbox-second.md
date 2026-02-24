@@ -1,6 +1,6 @@
 # Sandbox-First Security Proof Plan (Lean)
 
-Status: active
+Status: complete
 Owner: kevin + codex
 Last Updated: 2026-02-24
 Thread: sandbox-security-proof
