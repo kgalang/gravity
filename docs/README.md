@@ -10,6 +10,7 @@ These docs are the canonical source of truth for architecture, execution status,
 - [TEMP CP7 memory-hook deep dive](architecture/temp-cp7-session-end-memory-hook-explainer.md)
 - [TEMP OpenClaw vs Gravity session/memory strategy](architecture/temp-openclaw-vs-gravity-session-memory.md)
 - [TEMP CP8 self-authoring loop explainer](architecture/temp-cp8-self-authoring-loop-explainer.md)
+- [TEMP Codex App Server vs Gravity architecture](architecture/temp-codex-app-server-vs-gravity-architecture.md)
 - [MVP checkpoint status](checkpoints/mvp-status.md)
 - [CP6 verification matrix](checkpoints/cp6-verification.md)
 - [CP7 verification matrix](checkpoints/cp7-verification.md)
