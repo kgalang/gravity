@@ -1,6 +1,6 @@
 # Tech Debt Tracker
 
-Last Updated: 2026-02-19
+Last Updated: 2026-02-24
 
 | ID | Debt Item | Impact | Planned Fix |
 | --- | --- | --- | --- |
@@ -9,5 +9,7 @@ Last Updated: 2026-02-19
 | TD-003 | No CI migration smoke test yet | Migration regressions can slip until manual runtime checks | Add CI job for `npm run db:up && npm run db:migrate && npm run db:apply` |
 | TD-004 | `schema.sql` snapshot is maintained manually | Schema snapshot can drift from `db/migrations/` over time | Add a repo check that validates `schema.sql` matches migration output |
 | TD-005 | Shutdown path does not enforce best-effort process exit when Slack disconnect fails | Runtime can hang or exit non-deterministically during SIGINT/SIGTERM under socket/network failure | Wrap Slack transport stop in guarded shutdown logic (`try/finally`), log disconnect errors, and always complete process termination |
-| TD-006 | No `npm run doctor` command for runtime/live-definition misconfiguration checks | Misconfigured agent specs, resource paths, ingress bindings, required CLIs, or runtime writability can fail late at runtime | Add `npm run doctor` with scoped runtime checks that explicitly avoid overlap with TypeScript/static guarantees |
+| TD-006 | No `npm run doctor` command for runtime/live-definition misconfiguration checks | Misconfigured agent specs, resource paths, ingress bindings, required CLIs, or runtime writability can fail late at runtime | Deferred by current sandbox-first execution thread (`docs/plans/active/2026-02-24-reliability-first-sandbox-second.md`): do not implement now; revisit after sandbox security proof |
 | TD-007 | Long-term memory strategy is currently session-end-hook-centric; no optional continuous capture mode yet | Low-volume sessions can miss durable extraction opportunities until idle close, and memory quality policy remains implicit | Post-demo: evaluate hybrid strategy (session-end hook + optional continuous capture + optional pre-compaction flush), define quality gates/telemetry, and stage rollout behind config flags |
+| TD-008 | Sandbox MVP excludes full approval-state workflow (`request_id`, timeout, cancel, pending states) | Sandbox can enforce allow/deny policy, but cannot yet support richer human-in-the-loop approval orchestration | After sandbox MVP proof, add correlated approval lifecycle and verification coverage for non-happy-path approval outcomes |
+| TD-009 | Sandbox-first thread defers broader runtime hardening backlog (ingress overload policy, advanced delivery fallback behavior, expanded edge-case reliability tests) | Runtime remains serviceable for pre-customer operation, but reliability behavior under stress/edge conditions is less explicit than target production posture | Re-scope a dedicated hardening thread after sandbox proof and close with explicit overload/delivery contracts plus targeted reliability tests |

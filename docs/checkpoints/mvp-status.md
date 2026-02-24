@@ -1,6 +1,6 @@
 # MVP Checkpoint Status
 
-Last Updated: 2026-02-19
+Last Updated: 2026-02-24
 
 | Checkpoint | Status | Notes | Verification |
 | --- | --- | --- | --- |
@@ -17,3 +17,7 @@ Last Updated: 2026-02-19
 | CP10 | complete | Proactive runtime now includes replay/backfill reconciliation from durable run history, manual wake controls (`!wake` command text on mapped slash commands), and quiet-hours suppression with optional manual bypass. CP10 verification harness validates replay/manual/quiet-hours behavior and proactive run-log persistence contracts. | `docs/plans/completed/2026-02-18-cp10-proactive-validation-hardening.md`, `docs/checkpoints/cp10-verification.md`, `npm run verify:cp10`, `src/runtime/proactive-trigger-scheduler.ts` |
 
 ## Next Milestones
+- Sandbox-first implementation thread: [`docs/plans/active/2026-02-24-reliability-first-sandbox-second.md`](../plans/active/2026-02-24-reliability-first-sandbox-second.md)
+- Priority work: ship a lean fail-closed sandbox boundary via `ExecutorManager` to prove runtime security posture.
+- Additional hardening is intentionally tracked as tech debt for later (TD-008, TD-009).
+- `npm run doctor` remains explicitly deferred for this thread (TD-006).
