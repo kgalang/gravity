@@ -8,6 +8,7 @@ Keep moving parts explicit and replaceable.
 - `defineConfig` / `defineAgent` contracts (`agents/contracts.ts`): canonical code-defined configuration and agent declaration authoring model.
 - `AgentRegistry` (`agents/index.ts`): typed registry assembly with duplicate `agentId` and slash-command collision guards.
 - `CompiledAgentDeclarations` (`agents/index.ts`): code-defined ingress/proactive/session declarations compiled from `defineConfig` + `defineAgent` contracts for runtime cutover.
+- `PhoenixRuntimeConfig` (`src/runtime/config.ts`): typed env-contract boundary for local Phoenix wiring (`GRAVITY_PHOENIX_ENABLED`, `GRAVITY_PHOENIX_UI_BASE_URL`, `GRAVITY_PHOENIX_COLLECTOR_ENDPOINT`) ahead of telemetry adapter rollout.
 - `SurfaceAdapter`: surface-specific ingress/egress adapters (Slack now; additional surfaces later).
 - `AgentSpecRepository`: transitional repository seam while behavior source moves off `gravity.agents.config`.
 - `EventIdempotencyGuard` (`src/runtime/event-idempotency.ts`): blocks duplicate source events across slash and non-slash ingress paths.
@@ -72,6 +73,8 @@ Keep moving parts explicit and replaceable.
 - `defineConfig` / `defineAgent` rollback path: revert `agents/contracts.ts` to previous declaration shape while preserving required IDs (`agentId`, `sessionKey`, `runId`) in downstream runtime contracts.
 - `AgentRegistry` owner: platform runtime layer.
 - `AgentRegistry` rollback path: pin `agents/index.ts` to previous known-good declarations and keep DB projection unchanged.
+- `PhoenixRuntimeConfig` owner: platform runtime layer.
+- `PhoenixRuntimeConfig` rollback path: set `GRAVITY_PHOENIX_ENABLED=false` and defer all Phoenix integration until the telemetry adapter seam is restored.
 - `EventIdempotencyGuard` owner: platform runtime layer.
 - `EventIdempotencyGuard` rollback path: disable runtime pre-run duplicate checks and rely on `gravity.runs.source_event_id` uniqueness only.
 - `SessionKeyBuilder` owner: platform runtime layer.

@@ -16,6 +16,14 @@ SELECT id, name, status, channel_id FROM gravity.agents;
 
 4. Stop infra when done: `npm run db:down`
 
+## Evals + Monitoring V1 (Phase 0) Commands
+1. Start local infra (`postgres` + `phoenix`): `npm run infra:up`
+2. Inspect infra status: `npm run infra:status`
+3. Verify Phoenix UI health from host: `curl -fsS http://localhost:6006 > /dev/null && echo "phoenix-ui:ok"`
+4. Verify Phoenix collector port from host: `nc -z localhost 4317 && echo "phoenix-collector:ok"`
+5. Start Gravity runtime against local infra: `npm run dev`
+6. Stop infra when done: `npm run db:down`
+
 ## Migration Commands
 1. Create migration file: `npm run db:new -- <migration_name>`
 2. Apply pending migrations only: `npm run db:migrate`

@@ -19,5 +19,6 @@ Last Updated: 2026-02-24
 ## Next Milestones
 - Active implementation thread: [`docs/plans/active/2026-02-24-evals-monitoring-v1.md`](../plans/active/2026-02-24-evals-monitoring-v1.md)
 - Focus: self-hosted Phoenix via local Docker Compose, centralized risk-based review queue, and Slack `central-review` operator workflow.
+- Progress: Phase 0 local Phoenix baseline is complete (Compose service, env contract, runbook health path); Phase 1 observability/evals wiring is next.
 - Sandbox-first implementation thread is complete and archived: [`docs/plans/completed/2026-02-24-reliability-first-sandbox-second.md`](../plans/completed/2026-02-24-reliability-first-sandbox-second.md)
 - Additional hardening remains tracked as tech debt for later (TD-008, TD-009), and `npm run doctor` remains deferred (TD-006).

@@ -64,10 +64,10 @@ Out of scope:
   independent from vendor/UI changes.
 
 ## Phase 0: Local Phoenix Baseline (Now)
-- [ ] Add Phoenix service to local `docker-compose.yml` (persistent volume, default port).
-- [ ] Document startup/health commands in runbook (`docker compose up -d ...` + health checks).
-- [ ] Add required env contract for Gravity -> Phoenix wiring.
-- [ ] Verify local bootstrap path: Postgres + Phoenix + Gravity runtime start cleanly.
+- [x] Add Phoenix service to local `docker-compose.yml` (persistent volume, default port).
+- [x] Document startup/health commands in runbook (`docker compose up -d ...` + health checks).
+- [x] Add required env contract for Gravity -> Phoenix wiring.
+- [x] Verify local bootstrap path: Postgres + Phoenix + Gravity runtime start cleanly.
 
 ## Phase 1: Observability + Evals Wiring
 - [ ] Add runtime adapter that emits per-run telemetry with stable IDs.
