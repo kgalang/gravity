@@ -44,20 +44,20 @@ Out of scope:
 - Deferring `doctor` and advanced fallback logic keeps this thread focused on one measurable proof.
 
 ## Phase 1: Sandbox MVP (Now)
-- [ ] Define MVP sandbox policy contract (`allow`/`deny` + reason) and fail-closed defaults.
-- [ ] Implement `ExecutorManager` routing for host vs sandbox with a simple rollback switch (host-only mode).
-- [ ] Implement deterministic deny handling and deterministic sandbox-failure handling (safe response + run status updates).
-- [ ] Persist sandbox decision metadata tied to stable IDs (`runId`, `agentId`, `sessionKey`).
-- [ ] Update docs (`interfaces`, `system-map`, `RELIABILITY`, `mvp-status`) with boundary ownership and rollback notes.
-- [ ] Add lean unit tests for routing behavior (host vs sandbox).
-- [ ] Add lean unit tests for policy deny behavior.
-- [ ] Add lean unit tests for sandbox runtime failure behavior (fail-closed).
-- [ ] Add lean unit tests for rollback switch behavior (forced host).
+- [x] Define MVP sandbox policy contract (`allow`/`deny` + reason) and fail-closed defaults.
+- [x] Implement `ExecutorManager` routing for host vs sandbox with a simple rollback switch (host-only mode).
+- [x] Implement deterministic deny handling and deterministic sandbox-failure handling (explicit failed runs; no silent host fallback).
+- [x] Persist sandbox decision metadata tied to stable IDs (`runId`, `agentId`, `sessionKey`).
+- [x] Update docs (`interfaces`, `system-map`, `RELIABILITY`, `mvp-status`) with boundary ownership and rollback notes.
+- [x] Add lean unit tests for routing behavior (host vs sandbox).
+- [x] Add lean unit tests for policy deny behavior.
+- [x] Add lean unit tests for sandbox runtime failure behavior (fail-closed).
+- [x] Add lean unit tests for force-host mode behavior (sandbox-declared runs denied fail-closed).
 
 ## Explicit Deferral
-- [ ] TD-006 (`npm run doctor`) remains deferred.
-- [ ] TD-008 (full sandbox approval-state workflow) remains deferred.
-- [ ] TD-009 (broader reliability hardening backlog) remains deferred.
+- [x] TD-006 (`npm run doctor`) remains deferred.
+- [x] TD-008 (full sandbox approval-state workflow) remains deferred.
+- [x] TD-009 (broader reliability hardening backlog) remains deferred.
 
 ## Validation Strategy
 - Keep merge gates green (`npm run check`, `npm run lint:repo`).

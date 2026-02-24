@@ -18,6 +18,6 @@ Last Updated: 2026-02-24
 
 ## Next Milestones
 - Sandbox-first implementation thread: [`docs/plans/active/2026-02-24-reliability-first-sandbox-second.md`](../plans/active/2026-02-24-reliability-first-sandbox-second.md)
-- Priority work: ship a lean fail-closed sandbox boundary via `ExecutorManager` to prove runtime security posture.
+- Lean fail-closed sandbox boundary is now implemented via `ExecutorManager` (policy `allow`/`deny`, force-host fail-closed mode that denies sandbox-declared runs, explicit runtime failures without silent downgrade, and stable-ID-linked decision metadata in run logs).
 - Additional hardening is intentionally tracked as tech debt for later (TD-008, TD-009).
 - `npm run doctor` remains explicitly deferred for this thread (TD-006).
