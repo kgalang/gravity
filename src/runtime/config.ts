@@ -32,6 +32,12 @@ export type SandboxRuntimeConfig = Readonly<{
   forceHost: boolean;
 }>;
 
+export type PhoenixRuntimeConfig = Readonly<{
+  enabled: boolean;
+  uiBaseUrl: string;
+  collectorEndpoint: string;
+}>;
+
 export type AppConfig = {
   env: string;
   databaseUrl: string;
@@ -42,6 +48,7 @@ export type AppConfig = {
   session: SessionRuntimeConfig;
   selfAuthoring: SelfAuthoringRuntimeConfig;
   sandbox: SandboxRuntimeConfig;
+  phoenix: PhoenixRuntimeConfig;
   runtimeWarnings: readonly string[];
 };
 
@@ -55,6 +62,8 @@ const DEFAULT_RETRY_BASE_DELAY_MS = 1000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 5000;
 const DEFAULT_IDLE_EVICTION_MINUTES = 30;
 const DEFAULT_SELF_AUTHORING_QUEUE_MAX_DEPTH = 8;
+const DEFAULT_PHOENIX_UI_BASE_URL = "http://localhost:6006";
+const DEFAULT_PHOENIX_COLLECTOR_ENDPOINT = "http://localhost:4317";
 
 function normalizeOptionalEnv(value: string | undefined): string | null {
   if (!value) {
@@ -89,6 +98,35 @@ function parseFeatureBoolean(input: {
     `Invalid ${input.key}="${raw}". Feature is disabled (fail-closed).`,
   );
   return false;
+}
+
+function parseHttpUrl(input: {
+  env: NodeJS.ProcessEnv;
+  key: string;
+  defaultValue: string;
+  warnings: string[];
+}): string {
+  const raw = normalizeOptionalEnv(input.env[input.key]) ?? input.defaultValue;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    input.warnings.push(
+      `Invalid ${input.key}="${raw}". Expected absolute http(s) URL; using default "${input.defaultValue}".`,
+    );
+    return input.defaultValue;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    input.warnings.push(
+      `Invalid ${input.key}="${raw}". Expected http(s) URL; using default "${input.defaultValue}".`,
+    );
+    return input.defaultValue;
+  }
+
+  const normalized = parsed.toString();
+  return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
 
 function parseRequiredInteger(input: {
@@ -344,6 +382,36 @@ function resolveSandboxRuntimeConfig(
   };
 }
 
+function resolvePhoenixRuntimeConfig(
+  env: NodeJS.ProcessEnv,
+  warnings: string[],
+): PhoenixRuntimeConfig {
+  const enabled = parseFeatureBoolean({
+    env,
+    key: "GRAVITY_PHOENIX_ENABLED",
+    defaultValue: false,
+    warnings,
+  });
+  const uiBaseUrl = parseHttpUrl({
+    env,
+    key: "GRAVITY_PHOENIX_UI_BASE_URL",
+    defaultValue: DEFAULT_PHOENIX_UI_BASE_URL,
+    warnings,
+  });
+  const collectorEndpoint = parseHttpUrl({
+    env,
+    key: "GRAVITY_PHOENIX_COLLECTOR_ENDPOINT",
+    defaultValue: DEFAULT_PHOENIX_COLLECTOR_ENDPOINT,
+    warnings,
+  });
+
+  return {
+    enabled,
+    uiBaseUrl,
+    collectorEndpoint,
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const databaseUrlEnvVar = runtimeConfig.infra.database.urlEnvVar;
   const slackAppTokenEnvVar = runtimeConfig.infra.slack.appTokenEnvVar;
@@ -373,6 +441,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     session: resolveSessionRuntimeConfig(env, runtimeWarnings),
     selfAuthoring: resolveSelfAuthoringRuntimeConfig(env, runtimeWarnings),
     sandbox: resolveSandboxRuntimeConfig(env, runtimeWarnings),
+    phoenix: resolvePhoenixRuntimeConfig(env, runtimeWarnings),
     runtimeWarnings,
   };
 }

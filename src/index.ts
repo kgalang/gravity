@@ -1840,6 +1840,15 @@ try {
     for (const warning of config.runtimeWarnings) {
       console.warn(`[gravity][warning] ${warning}`);
     }
+    if (config.phoenix.enabled) {
+      console.log(
+        `[gravity] phoenix config enabled (uiBaseUrl=${config.phoenix.uiBaseUrl} collectorEndpoint=${config.phoenix.collectorEndpoint})`,
+      );
+    } else {
+      console.log(
+        "[gravity] phoenix config disabled (set GRAVITY_PHOENIX_ENABLED=true to enable telemetry wiring)",
+      );
+    }
     anthropicApiKey = config.anthropicApiKey;
     console.log("[gravity] runtime scaffold active");
     executorManager = createExecutorManager({

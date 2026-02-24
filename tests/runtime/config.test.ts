@@ -43,6 +43,11 @@ describe("loadConfig", () => {
         enabled: true,
         forceHost: false,
       },
+      phoenix: {
+        enabled: false,
+        uiBaseUrl: "http://localhost:6006",
+        collectorEndpoint: "http://localhost:4317",
+      },
       runtimeWarnings: [],
     });
   });
@@ -54,6 +59,9 @@ describe("loadConfig", () => {
       [databaseUrlEnvVar]: "postgres://custom-url",
       GRAVITY_LIVENESS_INTERVAL_SECONDS: "45",
       GRAVITY_SESSION_IDLE_EVICTION_MINUTES: "5",
+      GRAVITY_PHOENIX_ENABLED: "true",
+      GRAVITY_PHOENIX_UI_BASE_URL: "https://phoenix.local/ui/",
+      GRAVITY_PHOENIX_COLLECTOR_ENDPOINT: "https://phoenix.local:4317/",
     });
 
     expect(config.env).toBe("test");
@@ -67,6 +75,11 @@ describe("loadConfig", () => {
     expect(config.sandbox).toEqual({
       enabled: true,
       forceHost: false,
+    });
+    expect(config.phoenix).toEqual({
+      enabled: true,
+      uiBaseUrl: "https://phoenix.local/ui",
+      collectorEndpoint: "https://phoenix.local:4317",
     });
     expect(config.runtimeWarnings).toEqual([]);
   });
@@ -110,6 +123,9 @@ describe("loadConfig", () => {
       GRAVITY_SELF_AUTHORING_QUEUE_MAX_DEPTH: "zero",
       GRAVITY_SANDBOX_ENABLED: "maybe",
       GRAVITY_SANDBOX_FORCE_HOST: "also-maybe",
+      GRAVITY_PHOENIX_ENABLED: "maybe",
+      GRAVITY_PHOENIX_UI_BASE_URL: "not-a-url",
+      GRAVITY_PHOENIX_COLLECTOR_ENDPOINT: "ftp://collector",
     });
 
     expect(config.session.preRunSyncEnabled).toBe(false);
@@ -122,9 +138,25 @@ describe("loadConfig", () => {
       enabled: false,
       forceHost: false,
     });
+    expect(config.phoenix).toEqual({
+      enabled: false,
+      uiBaseUrl: "http://localhost:6006",
+      collectorEndpoint: "http://localhost:4317",
+    });
     expect(config.runtimeWarnings.some((warning) => warning.includes("GRAVITY_SANDBOX_ENABLED"))).toBe(true);
     expect(
       config.runtimeWarnings.some((warning) => warning.includes("GRAVITY_SANDBOX_FORCE_HOST")),
+    ).toBe(true);
+    expect(config.runtimeWarnings.some((warning) => warning.includes("GRAVITY_PHOENIX_ENABLED"))).toBe(
+      true,
+    );
+    expect(config.runtimeWarnings.some((warning) => warning.includes("GRAVITY_PHOENIX_UI_BASE_URL"))).toBe(
+      true,
+    );
+    expect(
+      config.runtimeWarnings.some((warning) =>
+        warning.includes("GRAVITY_PHOENIX_COLLECTOR_ENDPOINT"),
+      ),
     ).toBe(true);
     expect(config.runtimeWarnings.length).toBeGreaterThan(0);
   });
